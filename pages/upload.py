@@ -9,6 +9,20 @@ def show():
     """データアップロードページを表示"""
     st.header("📤 データアップロード")
     
+    # セッション状態の初期化
+    if 'original_data' not in st.session_state:
+        st.session_state.original_data = None
+    if 'uploaded_filename' not in st.session_state:
+        st.session_state.uploaded_filename = None
+    if 'data_columns' not in st.session_state:
+        st.session_state.data_columns = []
+    if 'current_mapping' not in st.session_state:
+        st.session_state.current_mapping = {}
+    if 'encoding_info' not in st.session_state:
+        st.session_state.encoding_info = None
+    if 'mapping_completed' not in st.session_state:
+        st.session_state.mapping_completed = False
+    
     # アップロードセクション
     st.subheader("1. CSVファイルアップロード")
     uploaded_file = st.file_uploader(
@@ -17,108 +31,147 @@ def show():
         help="分析対象のCSVファイルをアップロードしてください"
     )
     
+    # 新しいファイルがアップロードされた場合
     if uploaded_file is not None:
-        try:
-            # データ読み込み（エンコーディング自動判別）
-            df = read_csv_with_encoding(uploaded_file)
-            st.success(f"✅ ファイル読み込み成功: {len(df)}行 x {len(df.columns)}列")
-            
-            # データプレビュー
-            st.subheader("2. データプレビュー")
-            st.dataframe(df.head(10), use_container_width=True)
-            
-            # データマッピング
-            st.subheader("3. データマッピング設定")
-            st.info("CSVのカラム名をシステム項目にマッピングしてください")
-            
-            mapping = {}
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**必須項目**")
-                mapping['P_code'] = st.selectbox(
-                    "商品コード",
-                    options=[''] + list(df.columns),
-                    help="商品を識別するコード（必須）"
-                )
-                mapping['Date'] = st.selectbox(
-                    "年月",
-                    options=[''] + list(df.columns),
-                    help="YYYYMM形式の年月データ（必須）"
-                )
-                mapping['Actual'] = st.selectbox(
-                    "実績値",
-                    options=[''] + list(df.columns),
-                    help="実際の売上・需要実績（必須）"
-                )
-                mapping['AI_pred'] = st.selectbox(
-                    "AI予測値",
-                    options=[''] + list(df.columns),
-                    help="AIによる予測値（必須）"
-                )
-                mapping['Plan_01'] = st.selectbox(
-                    "計画値01",
-                    options=[''] + list(df.columns),
-                    help="基準となる計画値（必須）"
-                )
+        # ファイル名が変わった場合のみ処理
+        if st.session_state.uploaded_filename != uploaded_file.name:
+            try:
+                # データ読み込み（エンコーディング自動判別）
+                df, encoding_info = read_csv_with_encoding(uploaded_file)
                 
-            with col2:
-                st.markdown("**任意項目**")
-                mapping['Class_01'] = st.selectbox(
-                    "分類01",
-                    options=[''] + list(df.columns),
-                    help="商品分類・カテゴリ1（任意）"
-                )
-                mapping['Class_02'] = st.selectbox(
-                    "分類02",
-                    options=[''] + list(df.columns),
-                    help="商品分類・カテゴリ2（任意）"
-                )
-                mapping['Class_abc'] = st.selectbox(
-                    "ABC区分",
-                    options=[''] + list(df.columns),
-                    help="ABC分析による区分（任意）"
-                )
-                mapping['Plan_02'] = st.selectbox(
-                    "計画値02",
-                    options=[''] + list(df.columns),
-                    help="比較用の計画値（任意）"
-                )
-            
-            # マッピング確認・保存
-            if st.button("マッピング設定を適用", type="primary"):
-                # 必須項目チェック
-                required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
-                missing_fields = [field for field in required_fields if not mapping[field]]
+                # セッション状態に保存
+                st.session_state.original_data = df
+                st.session_state.uploaded_filename = uploaded_file.name
+                st.session_state.data_columns = list(df.columns)
+                st.session_state.encoding_info = encoding_info
+                st.session_state.current_mapping = {}
+                st.session_state.mapping_completed = False
                 
-                if missing_fields:
-                    st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
+                st.success(f"✅ ファイル読み込み成功: {len(df)}行 x {len(df.columns)}列")
+                
+            except Exception as e:
+                st.error(f"❌ ファイル読み込みエラー: {str(e)}")
+                return
+    
+    # 保存されたデータがある場合の表示
+    if st.session_state.original_data is not None:
+        df = st.session_state.original_data
+        
+        # ファイル情報表示
+        if st.session_state.encoding_info:
+            st.info(f"📁 読み込み済みファイル: {st.session_state.uploaded_filename}")
+            st.info(f"🔍 {st.session_state.encoding_info}")
+        
+        # データプレビュー
+        st.subheader("2. データプレビュー")
+        st.dataframe(df.head(10), use_container_width=True)
+        
+        # データマッピング
+        st.subheader("3. データマッピング設定")
+        st.info("CSVのカラム名をシステム項目にマッピングしてください")
+        
+        # マッピング設定UI
+        mapping = {}
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**必須項目**")
+            mapping['P_code'] = st.selectbox(
+                "商品コード",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('P_code', '')),
+                help="商品を識別するコード（必須）"
+            )
+            mapping['Date'] = st.selectbox(
+                "年月",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Date', '')),
+                help="YYYYMM形式の年月データ（必須）"
+            )
+            mapping['Actual'] = st.selectbox(
+                "実績値",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Actual', '')),
+                help="実際の売上・需要実績（必須）"
+            )
+            mapping['AI_pred'] = st.selectbox(
+                "AI予測値",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('AI_pred', '')),
+                help="AIによる予測値（必須）"
+            )
+            mapping['Plan_01'] = st.selectbox(
+                "計画値01",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_01', '')),
+                help="基準となる計画値（必須）"
+            )
+            
+        with col2:
+            st.markdown("**任意項目**")
+            mapping['Class_01'] = st.selectbox(
+                "分類01",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_01', '')),
+                help="商品分類・カテゴリ1（任意）"
+            )
+            mapping['Class_02'] = st.selectbox(
+                "分類02",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_02', '')),
+                help="商品分類・カテゴリ2（任意）"
+            )
+            mapping['Class_abc'] = st.selectbox(
+                "ABC区分",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
+                help="ABC分析による区分（任意）"
+            )
+            mapping['Plan_02'] = st.selectbox(
+                "計画値02",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_02', '')),
+                help="比較用の計画値（任意）"
+            )
+        
+        # 現在のマッピング状態を更新
+        st.session_state.current_mapping = mapping
+        
+        # マッピング確認・保存
+        if st.button("マッピング設定を適用", type="primary"):
+            # 必須項目チェック
+            required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
+            missing_fields = [field for field in required_fields if not mapping[field]]
+            
+            if missing_fields:
+                st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
+            else:
+                # データ変換
+                mapped_df = apply_mapping(df, mapping)
+                
+                # 基本検証
+                if validate_mapped_data(mapped_df):
+                    st.session_state.data = mapped_df
+                    st.session_state.mapping = mapping
+                    st.session_state.mapping_completed = True
+                    st.success("✅ データマッピング完了！他のページで分析を開始できます。")
+                    st.rerun()
                 else:
-                    # データ変換
-                    mapped_df = apply_mapping(df, mapping)
-                    
-                    # 基本検証
-                    if validate_mapped_data(mapped_df):
-                        st.session_state.data = mapped_df
-                        st.session_state.mapping = mapping
-                        st.success("✅ データマッピング完了！他のページで分析を開始できます。")
-                        
-                        # マッピング結果表示
-                        st.subheader("4. マッピング結果")
-                        mapping_df = pd.DataFrame([
-                            {"システム項目": k, "CSVカラム": v, "データ型": str(mapped_df[k].dtype) if v else "未設定"}
-                            for k, v in mapping.items() if v
-                        ])
-                        st.dataframe(mapping_df, use_container_width=True)
-                        
-                        # 変換後データプレビュー
-                        st.subheader("5. 変換後データプレビュー")
-                        st.dataframe(mapped_df.head(), use_container_width=True)
-                    else:
-                        st.error("❌ データ検証でエラーが発生しました")
-                        
-        except Exception as e:
-            st.error(f"❌ ファイル読み込みエラー: {str(e)}")
+                    st.error("❌ データ検証でエラーが発生しました")
+        
+        # マッピング完了後の表示
+        if st.session_state.mapping_completed and st.session_state.data is not None:
+            # マッピング結果表示
+            st.subheader("4. マッピング結果")
+            mapping_df = pd.DataFrame([
+                {"システム項目": k, "CSVカラム": v, "データ型": str(st.session_state.data[k].dtype) if v else "未設定"}
+                for k, v in st.session_state.current_mapping.items() if v
+            ])
+            st.dataframe(mapping_df, use_container_width=True)
+            
+            # 変換後データプレビュー
+            st.subheader("5. 変換後データプレビュー")
+            st.dataframe(st.session_state.data.head(), use_container_width=True)
     
     # 既にデータが読み込まれている場合の情報表示
     if st.session_state.data is not None:
@@ -132,6 +185,16 @@ def show():
             st.metric("期間範囲", f"{df['Date'].min()} - {df['Date'].max()}")
         with col3:
             st.metric("商品コード数", df['P_code'].nunique())
+
+def get_selectbox_index(options, value):
+    """selectboxのindex値を取得"""
+    try:
+        if value in options:
+            return options.index(value) + 1  # 空の選択肢があるため+1
+        else:
+            return 0
+    except:
+        return 0
 
 def apply_mapping(df, mapping):
     """データフレームにマッピングを適用"""
@@ -157,7 +220,7 @@ def read_csv_with_encoding(uploaded_file):
     if detected_encoding and detected_encoding not in encodings:
         encodings.insert(0, detected_encoding)
     
-    st.info(f"🔍 文字エンコーディング判別結果: {detected_encoding} (信頼度: {detected.get('confidence', 0):.2f})")
+    encoding_info = f"🔍 文字エンコーディング判別結果: {detected_encoding} (信頼度: {detected.get('confidence', 0):.2f})"
     
     # 各エンコーディングを順番に試行
     last_error = None
@@ -166,8 +229,8 @@ def read_csv_with_encoding(uploaded_file):
             # ファイルポインタをリセット
             uploaded_file.seek(0)
             df = pd.read_csv(uploaded_file, encoding=encoding)
-            st.success(f"✅ エンコーディング '{encoding}' で読み込み成功")
-            return df
+            success_info = f"✅ エンコーディング '{encoding}' で読み込み成功"
+            return df, f"{encoding_info}\n{success_info}"
         except UnicodeDecodeError as e:
             last_error = e
             continue

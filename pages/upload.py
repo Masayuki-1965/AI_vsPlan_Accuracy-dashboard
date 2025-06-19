@@ -208,41 +208,221 @@ def apply_mapping(df, mapping):
 
 def read_csv_with_encoding(uploaded_file):
     """複数のエンコーディングを試してCSVファイルを読み込み"""
-    # エンコーディング候補リスト（日本語ファイルで一般的なもの）
-    encodings = ['utf-8', 'shift_jis', 'cp932', 'utf-8-sig', 'euc-jp']
+    # 日本語ファイル用の優先エンコーディング順序（Shift_JIS系を最優先）
+    encodings = ['shift_jis', 'cp932', 'utf-8', 'utf-8-sig', 'euc-jp', 'iso-2022-jp', 'latin1']
     
     # まず文字エンコーディングを自動判別
     raw_data = uploaded_file.getvalue()
     detected = chardet.detect(raw_data)
-    detected_encoding = detected.get('encoding', 'utf-8')
+    detected_encoding = detected.get('encoding', '').lower() if detected.get('encoding') else ''
+    confidence = detected.get('confidence', 0)
     
-    # 判別されたエンコーディングを最初に試す
-    if detected_encoding and detected_encoding not in encodings:
+    encoding_info = f"🔍 文字エンコーディング判別結果: {detected_encoding.upper() if detected_encoding else 'Unknown'} (信頼度: {confidence:.2f})"
+    
+    # MacRomanや低信頼度の場合は無視してShift_JISを強制的に最初に試行
+    if detected_encoding == 'macroman':
+        # MacRomanは日本語ファイルでは信頼できない - 完全に無視
+        pass  # Shift_JISを最優先で試行
+    elif confidence < 0.5:
+        # 信頼度が低い場合もShift_JISを優先
+        pass  # Shift_JISを最優先で試行
+    elif detected_encoding and detected_encoding not in [enc.lower() for enc in encodings]:
+        # 信頼度が高い場合のみ、その他の判別結果を試行リストに追加
         encodings.insert(0, detected_encoding)
-    
-    encoding_info = f"🔍 文字エンコーディング判別結果: {detected_encoding} (信頼度: {detected.get('confidence', 0):.2f})"
     
     # 各エンコーディングを順番に試行
     last_error = None
+    best_result = None
+    best_score = -1
+    encoding_results = []  # デバッグ用
+    
     for encoding in encodings:
         try:
             # ファイルポインタをリセット
             uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, encoding=encoding)
-            success_info = f"✅ エンコーディング '{encoding}' で読み込み成功"
-            return df, f"{encoding_info}\n{success_info}"
-        except UnicodeDecodeError as e:
+            
+            # CSVファイルを読み込み（区切り文字とクォート文字を自動判別）
+            df = read_csv_with_options(uploaded_file, encoding)
+            
+            # 読み込み後の品質スコアを計算
+            quality_score = calculate_japanese_quality_score(df)
+            encoding_results.append(f"{encoding}: {quality_score}/10")
+            
+            if quality_score > best_score:
+                best_result = (df, encoding, quality_score)
+                best_score = quality_score
+            
+            # 高品質な結果が得られた場合は即座に採用
+            if quality_score >= 7:  # 10点満点中7点以上
+                break
+                
+        except (UnicodeDecodeError, UnicodeError, LookupError) as e:
+            encoding_results.append(f"{encoding}: エラー({type(e).__name__})")
             last_error = e
             continue
         except Exception as e:
+            encoding_results.append(f"{encoding}: エラー({type(e).__name__})")
             last_error = e
             continue
+    
+    # 最良の結果を採用
+    if best_result and best_score >= 2:  # 最低限の品質を満たす場合
+        df, successful_encoding, score = best_result
+        success_info = f"✅ エンコーディング '{successful_encoding.upper()}' で読み込み成功 (品質スコア: {score}/10)"
+        debug_info = f"🔧 試行結果: {' | '.join(encoding_results)}"
+        return df, f"{encoding_info}\n{success_info}\n{debug_info}"
     
     # すべて失敗した場合
     if last_error:
         raise Exception(f"すべてのエンコーディングで読み込みに失敗しました。最後のエラー: {str(last_error)}")
     else:
         raise Exception("CSVファイルの読み込みに失敗しました")
+
+def read_csv_with_options(uploaded_file, encoding):
+    """CSVファイルを適切なオプションで読み込み"""
+    # 区切り文字の候補
+    separators = [',', ';', '\t', '|']
+    
+    # クォート文字の候補
+    quote_chars = ['"', "'", None]
+    
+    best_df = None
+    best_columns = 0
+    
+    for sep in separators:
+        for quote_char in quote_chars:
+            try:
+                uploaded_file.seek(0)
+                if quote_char is None:
+                    df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep, quoting=3)  # QUOTE_NONE
+                else:
+                    df = pd.read_csv(uploaded_file, encoding=encoding, sep=sep, quotechar=quote_char)
+                
+                # より多くのカラムを持つ結果を優先
+                if len(df.columns) > best_columns and not df.empty:
+                    best_df = df
+                    best_columns = len(df.columns)
+                    
+                # 十分な数のカラムがある場合は早期終了
+                if best_columns >= 5:
+                    break
+                    
+            except Exception:
+                continue
+                
+        if best_columns >= 5:
+            break
+    
+    # 最良の結果を返す、なければデフォルトで再試行
+    if best_df is not None:
+        return best_df
+    else:
+        uploaded_file.seek(0)
+        return pd.read_csv(uploaded_file, encoding=encoding)
+
+def calculate_japanese_quality_score(df):
+    """読み込んだCSVの品質を0-10のスコアで評価"""
+    try:
+        # データフレームが空でないことを確認
+        if df.empty or len(df.columns) == 0:
+            return 0
+        
+        score = 0
+        
+        # カラム名と最初の数行のデータをサンプルとして検査
+        sample_texts = []
+        
+        # カラム名をチェック
+        column_names = [str(col) for col in df.columns[:10]]
+        sample_texts.extend(column_names)
+        
+        # 最初の数行のデータをチェック
+        for i in range(min(3, len(df))):
+            for j in range(min(5, len(df.columns))):
+                sample_texts.append(str(df.iloc[i, j]))
+        
+        sample_text = ' '.join(sample_texts)
+        
+        # 1. 文字化けパターンの検出 (マイナス点)
+        garbled_patterns = [
+            ('��', -5),  # よくある文字化け記号
+            ('����', -5),
+            ('ï¿½', -5),
+            ('\ufffd', -5),  # Unicode replacement character
+            ('Ã¤', -3),    # UTF-8の文字化け
+            ('Ã¯', -3),
+            ('Ã¦', -3),
+            ('â€', -3),
+            ('ã¤', -3),    # 追加の文字化けパターン
+            ('ã¯', -3),
+            ('ã¦', -3),
+            ('ã¨', -3),
+            ('ã‚', -3),
+            ('ã„', -3),
+            ('ã†', -3),
+            ('ã…', -3),
+            ('ê', -2),     # MacRoman由来の文字化け
+            ('ë', -2),
+            ('è', -2),
+            ('é', -2),
+        ]
+        
+        for pattern, penalty in garbled_patterns:
+            if pattern in sample_text:
+                score += penalty
+        
+        # 2. 日本語文字の存在チェック (プラス点)
+        if has_japanese_characters(sample_text):
+            score += 5
+            
+            # より詳細な日本語文字チェック
+            import re
+            hiragana_count = len(re.findall(r'[\u3040-\u309F]', sample_text))
+            katakana_count = len(re.findall(r'[\u30A0-\u30FF]', sample_text))
+            kanji_count = len(re.findall(r'[\u4E00-\u9FAF]', sample_text))
+            
+            # 日本語文字の種類が多いほど高得点
+            if hiragana_count > 0:
+                score += 1
+            if katakana_count > 0:
+                score += 1
+            if kanji_count > 0:
+                score += 2
+        
+        # 3. 意味のある文字列の存在チェック（このファイル特有の内容も含む）
+        meaningful_patterns = [
+            'コード', 'データ', '実績', '予測', '計画', '分類', '年月',
+            '商品', '売上', '需要', '在庫', '価格', '金額', '数量',
+            '生産工場', '生産ライン', 'ABC区分', '出庫実績', 'ハイブリッド',
+            '構成比', '異常値', '須賀川'  # このファイル特有の内容
+        ]
+        
+        matched_patterns = 0
+        for pattern in meaningful_patterns:
+            if pattern in sample_text:
+                matched_patterns += 1
+        
+        # マッチした意味のあるパターンの数に応じてスコアを加算
+        if matched_patterns >= 3:
+            score += 3  # 多くのパターンがマッチした場合は高得点
+        elif matched_patterns >= 1:
+            score += 1
+        
+        # 4. 基本的な読み込み成功ボーナス
+        score += 2
+        
+        # スコアを0-10の範囲に正規化
+        return max(0, min(10, score))
+        
+    except Exception:
+        return 0
+
+def has_japanese_characters(text):
+    """テキストに日本語文字が含まれているかチェック"""
+    import re
+    # ひらがな、カタカナ、漢字のUnicode範囲をチェック
+    japanese_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]')
+    return bool(japanese_pattern.search(text))
 
 def validate_mapped_data(df):
     """マッピング後のデータを検証"""

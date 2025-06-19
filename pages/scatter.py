@@ -154,15 +154,18 @@ def create_error_rate_scatter(df, selected_predictions):
             color_col = None
             color_discrete_map = None
         
+        # 実績がゼロの場合を除外（計算不能）
+        valid_data = df_with_errors[~df_with_errors['is_actual_zero']].copy()
+        
         # 散布図作成
         scatter = px.scatter(
-            df_with_errors,
+            valid_data,
             x='error_rate',
             y=pred_col,
             color=color_col,
             color_discrete_map=color_discrete_map,
             hover_data=['P_code', 'Actual', pred_col, 'absolute_error_rate'],
-            title=f"{get_prediction_name(pred_col)}の誤差率散布図"
+            title=f"{get_prediction_name(pred_col)}の誤差率散布図（分母：実績値）"
         )
         
         # サブプロットに追加
@@ -177,7 +180,7 @@ def create_error_rate_scatter(df, selected_predictions):
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="誤差率散布図（横軸: 誤差率、縦軸: 予測・計画値）"
+        title_text="誤差率散布図（横軸: 誤差率、縦軸: 予測・計画値）※分母：実績値"
     )
     
     fig.update_xaxes(title_text="誤差率", tickformat='.1%')

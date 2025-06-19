@@ -8,6 +8,7 @@ from utils.error_calculator import (
     calculate_weighted_average_error_rate,
     categorize_error_rates
 )
+from config.settings import COLOR_PALETTE, ERROR_RATE_CATEGORIES, MATRIX_DISPLAY_SETTINGS
 
 def show():
     """誤差率評価マトリクスページを表示"""
@@ -33,8 +34,8 @@ def show():
     
     st.info(f"📊 フィルター後データ件数: {len(filtered_df)}件")
     
-    # 誤差率マトリクス表示
-    display_error_rate_matrix(filtered_df, filter_settings)
+    # 新仕様の誤差率マトリクス表示
+    display_new_error_rate_matrix(filtered_df, filter_settings)
     
     # 基本統計情報表示
     display_basic_statistics(filtered_df, filter_settings)
@@ -55,18 +56,18 @@ def create_filter_ui(df):
         selected_error_type = st.selectbox(
             "誤差率タイプ",
             list(error_types.keys()),
-            help="絶対: |計画-実績|÷計画, 正: 計画>実績(滞留), 負: 計画<実績(欠品)"
+            help="絶対: |計画-実績|÷実績, 正: 計画>実績(滞留), 負: 計画<実績(欠品)"
         )
         filter_settings['error_type'] = error_types[selected_error_type]
         
     with col2:
         # 計画値フィルター
-        plan_options = ['AI予測 vs 計画01']
+        plan_options = ['計画01']
         if 'Plan_02' in df.columns:
-            plan_options.append('AI予測 vs 計画02')
+            plan_options.append('計画02')
         
-        selected_comparison = st.selectbox("比較対象", plan_options)
-        filter_settings['plan_column'] = 'Plan_01' if '計画01' in selected_comparison else 'Plan_02'
+        selected_plan = st.selectbox("計画値", plan_options)
+        filter_settings['plan_column'] = 'Plan_01' if selected_plan == '計画01' else 'Plan_02'
         
     with col3:
         # ABC区分フィルター
@@ -105,230 +106,329 @@ def apply_advanced_filters(df, filter_settings):
     
     return filtered_df
 
-def get_prediction_name(pred_type):
-    """予測タイプの表示名を取得"""
-    name_mapping = {
-        'AI_pred': 'AI予測',
-        'Plan_01': '計画01',
-        'Plan_02': '計画02'
-    }
-    return name_mapping.get(pred_type, pred_type)
-
-def display_error_rate_matrix(df, filter_settings):
-    """要求仕様に基づく誤差率マトリクス表示"""
+def display_new_error_rate_matrix(df, filter_settings):
+    """新仕様に基づく誤差率マトリクス表示"""
     st.subheader("📊 誤差率評価マトリクス")
     
-    # 計画値とAI予測の誤差率計算
     plan_col = filter_settings['plan_column']
     error_type = filter_settings['error_type']
     abc_categories = filter_settings['abc_categories']
+    
+    # 説明文追加（誤差率タイプに応じて動的変更）
+    error_definition = get_error_rate_definition(error_type)
+    st.markdown(f"""
+    **※マトリクス内はすべて商品コードの件数です**  
+    **誤差率定義**: {error_definition}（分母：実績値）
+    """)
     
     # AI予測と計画値の誤差率計算
     ai_errors = calculate_error_rates(df, 'AI_pred', 'Actual')
     plan_errors = calculate_error_rates(df, plan_col, 'Actual')
     
-    # マトリクス作成
-    ai_matrix = create_advanced_matrix(ai_errors, 'AI_pred', error_type, abc_categories)
-    plan_matrix = create_advanced_matrix(plan_errors, plan_col, error_type, abc_categories)
+    # 新仕様マトリクス作成
+    matrix_df = create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categories, plan_col)
     
     # マトリクス表示
-    display_combined_matrix(ai_matrix, plan_matrix, error_type, abc_categories)
+    display_styled_matrix(matrix_df, abc_categories)
 
-def create_advanced_matrix(df, pred_col, error_type, abc_categories):
-    """高度なマトリクス作成"""
+def create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categories, plan_col):
+    """新仕様に基づく包括的マトリクス作成"""
     # 誤差率カラム選択
     if error_type == 'absolute':
         error_col = 'absolute_error_rate'
-        error_name = '絶対誤差率'
     elif error_type == 'positive':
         error_col = 'positive_error_rate'
-        error_name = '正の誤差率'
     else:  # negative
         error_col = 'negative_error_rate'
-        error_name = '負の誤差率'
     
     # 誤差率区分追加
-    df_with_category = df.copy()
-    df_with_category['error_category'] = categorize_error_rates(df, error_col)
+    ai_errors['error_category'] = categorize_error_rates(ai_errors, error_col)
+    plan_errors['error_category'] = categorize_error_rates(plan_errors, error_col)
     
-    # 合計マトリクス
-    total_matrix = df_with_category.groupby('error_category').agg({
-        'P_code': 'count',
-        error_col: lambda x: calculate_weighted_average_error_rate(
-            df_with_category.loc[x.index], error_col, 'Actual'
-        )
-    }).rename(columns={'P_code': 'count', error_col: 'weighted_avg_error'})
+    # 誤差率帯の順序定義（誤差率タイプに応じて符号付き）
+    error_bands_original = [cat['label'] for cat in ERROR_RATE_CATEGORIES]
+    error_bands_display = get_error_rate_bands_with_signs(error_type)
     
-    # ABC区分別マトリクス
-    abc_matrices = {}
-    if 'Class_abc' in df.columns and abc_categories:
-        for abc in abc_categories:
-            abc_data = df_with_category[df_with_category['Class_abc'] == abc]
-            if not abc_data.empty:
-                abc_matrix = abc_data.groupby('error_category').agg({
-                    'P_code': 'count',
-                    error_col: lambda x: calculate_weighted_average_error_rate(
-                        abc_data.loc[x.index], error_col, 'Actual'
-                    ) if len(x) > 0 else np.nan
-                }).rename(columns={'P_code': 'count', error_col: 'weighted_avg_error'})
-                abc_matrices[abc] = abc_matrix
+    # カラム定義
+    columns = ['誤差率帯']
+    columns.extend(['合計_AI予測', f'合計_{get_plan_name(plan_col)}'])
     
-    return {
-        'total': total_matrix,
-        'abc': abc_matrices,
-        'error_type': error_name
-    }
-
-def display_combined_matrix(ai_matrix, plan_matrix, error_type, abc_categories):
-    """結合マトリクス表示"""
-    # 誤差率カテゴリー
-    error_categories = ['0-10%', '10-20%', '20-30%', '30-50%', '50-100%', '100%超']
+    for abc in abc_categories:
+        columns.extend([f'{abc}区分_AI予測', f'{abc}区分_{get_plan_name(plan_col)}'])
     
-    # 表示用データフレーム作成
+    # データフレーム初期化
     matrix_data = []
     
-    for category in error_categories:
-        row = {'誤差率帯': category}
+    # 各誤差率帯の集計
+    for i, band_original in enumerate(error_bands_original):
+        band_display = error_bands_display[i]
+        row = {'誤差率帯': band_display}
         
         # 合計（AI予測／計画）
-        ai_count = ai_matrix['total'].loc[category, 'count'] if category in ai_matrix['total'].index else 0
-        plan_count = plan_matrix['total'].loc[category, 'count'] if category in plan_matrix['total'].index else 0
+        ai_count = len(ai_errors[ai_errors['error_category'] == band_original])
+        plan_count = len(plan_errors[plan_errors['error_category'] == band_original])
         row['合計_AI予測'] = ai_count
-        row['合計_計画'] = plan_count
+        row[f'合計_{get_plan_name(plan_col)}'] = plan_count
         
         # ABC区分別
         for abc in abc_categories:
-            if abc in ai_matrix['abc']:
-                ai_abc_count = ai_matrix['abc'][abc].loc[category, 'count'] if category in ai_matrix['abc'][abc].index else 0
+            if 'Class_abc' in ai_errors.columns:
+                ai_abc_count = len(ai_errors[(ai_errors['error_category'] == band_original) & (ai_errors['Class_abc'] == abc)])
+                plan_abc_count = len(plan_errors[(plan_errors['error_category'] == band_original) & (plan_errors['Class_abc'] == abc)])
+                row[f'{abc}区分_AI予測'] = ai_abc_count
+                row[f'{abc}区分_{get_plan_name(plan_col)}'] = plan_abc_count
             else:
-                ai_abc_count = 0
-                
-            if abc in plan_matrix['abc']:
-                plan_abc_count = plan_matrix['abc'][abc].loc[category, 'count'] if category in plan_matrix['abc'][abc].index else 0
-            else:
-                plan_abc_count = 0
-                
-            row[f'{abc}区分_AI予測'] = ai_abc_count
-            row[f'{abc}区分_計画'] = plan_abc_count
+                row[f'{abc}区分_AI予測'] = 0
+                row[f'{abc}区分_{get_plan_name(plan_col)}'] = 0
         
         matrix_data.append(row)
     
-    # 加重平均誤差率行を追加
-    weighted_avg_row = {'誤差率帯': '加重平均'}
+    # 合計行の追加
+    total_row = {'誤差率帯': '合計（件数）'}
+    total_row['合計_AI予測'] = len(ai_errors)
+    total_row[f'合計_{get_plan_name(plan_col)}'] = len(plan_errors)
     
-    # 合計の加重平均
-    ai_total_avg = calculate_overall_weighted_average(ai_matrix['total'])
-    plan_total_avg = calculate_overall_weighted_average(plan_matrix['total'])
-    weighted_avg_row['合計_AI予測'] = f"{ai_total_avg:.0%}" if not np.isnan(ai_total_avg) else "N/A"
-    weighted_avg_row['合計_計画'] = f"{plan_total_avg:.0%}" if not np.isnan(plan_total_avg) else "N/A"
-    
-    # ABC区分別の加重平均
     for abc in abc_categories:
-        if abc in ai_matrix['abc']:
-            ai_abc_avg = calculate_overall_weighted_average(ai_matrix['abc'][abc])
-            weighted_avg_row[f'{abc}区分_AI予測'] = f"{ai_abc_avg:.0%}" if not np.isnan(ai_abc_avg) else "N/A"
+        if 'Class_abc' in ai_errors.columns:
+            ai_abc_total = len(ai_errors[ai_errors['Class_abc'] == abc])
+            plan_abc_total = len(plan_errors[plan_errors['Class_abc'] == abc])
+            total_row[f'{abc}区分_AI予測'] = ai_abc_total
+            total_row[f'{abc}区分_{get_plan_name(plan_col)}'] = plan_abc_total
         else:
-            weighted_avg_row[f'{abc}区分_AI予測'] = "N/A"
+            total_row[f'{abc}区分_AI予測'] = 0
+            total_row[f'{abc}区分_{get_plan_name(plan_col)}'] = 0
+    
+    matrix_data.append(total_row)
+    
+    # 加重平均誤差率行の追加
+    weighted_avg_row = {'誤差率帯': '加重平均誤差率（%）'}
+    
+    # 全体の加重平均（数値として保存）
+    ai_weighted_avg = calculate_weighted_average_error_rate(ai_errors, error_col, 'Actual') * 100
+    plan_weighted_avg = calculate_weighted_average_error_rate(plan_errors, error_col, 'Actual') * 100
+    weighted_avg_row['合計_AI予測'] = ai_weighted_avg if not pd.isna(ai_weighted_avg) else None
+    weighted_avg_row[f'合計_{get_plan_name(plan_col)}'] = plan_weighted_avg if not pd.isna(plan_weighted_avg) else None
+    
+    # ABC区分別の加重平均（数値として保存）
+    for abc in abc_categories:
+        if 'Class_abc' in ai_errors.columns:
+            ai_abc_data = ai_errors[ai_errors['Class_abc'] == abc]
+            plan_abc_data = plan_errors[plan_errors['Class_abc'] == abc]
             
-        if abc in plan_matrix['abc']:
-            plan_abc_avg = calculate_overall_weighted_average(plan_matrix['abc'][abc])
-            weighted_avg_row[f'{abc}区分_計画'] = f"{plan_abc_avg:.0%}" if not np.isnan(plan_abc_avg) else "N/A"
+            ai_abc_weighted = calculate_weighted_average_error_rate(ai_abc_data, error_col, 'Actual') * 100
+            plan_abc_weighted = calculate_weighted_average_error_rate(plan_abc_data, error_col, 'Actual') * 100
+            
+            weighted_avg_row[f'{abc}区分_AI予測'] = ai_abc_weighted if not pd.isna(ai_abc_weighted) else None
+            weighted_avg_row[f'{abc}区分_{get_plan_name(plan_col)}'] = plan_abc_weighted if not pd.isna(plan_abc_weighted) else None
         else:
-            weighted_avg_row[f'{abc}区分_計画'] = "N/A"
+            weighted_avg_row[f'{abc}区分_AI予測'] = None
+            weighted_avg_row[f'{abc}区分_{get_plan_name(plan_col)}'] = None
     
     matrix_data.append(weighted_avg_row)
     
-    # データフレーム作成・表示
-    matrix_df = pd.DataFrame(matrix_data)
+    # データフレーム作成
+    matrix_df = pd.DataFrame(matrix_data, columns=columns)
+    
+    return matrix_df
+
+def get_plan_name(plan_col):
+    """計画カラム名を表示用に変換"""
+    return '計画01' if plan_col == 'Plan_01' else '計画02'
+
+def get_error_rate_definition(error_type):
+    """誤差率タイプに応じた定義文を取得"""
+    definitions = {
+        'absolute': '|計画値 - 実績値| ÷ 実績値',
+        'positive': '(計画値 - 実績値) ÷ 実績値（計画 > 実績時のみ）',
+        'negative': '(計画値 - 実績値) ÷ 実績値（計画 < 実績時のみ）'
+    }
+    return definitions.get(error_type, '|計画値 - 実績値| ÷ 実績値')
+
+def get_error_rate_bands_with_signs(error_type):
+    """誤差率タイプに応じた誤差率帯ラベルを取得"""
+    from config.settings import ERROR_RATE_CATEGORIES
+    
+    bands = []
+    for category in ERROR_RATE_CATEGORIES:
+        if 'special' in category:
+            bands.append(category['label'])
+        else:
+            label = category['label']
+            if error_type == 'positive':
+                # 正の誤差率の場合は「+」を付ける
+                label = '+' + label
+            elif error_type == 'negative':
+                # 負の誤差率の場合は「-」を付ける
+                label = '-' + label
+            # 絶対誤差率の場合は符号なし
+            bands.append(label)
+    
+    return bands
+
+def display_styled_matrix(matrix_df, abc_categories):
+    """スタイル付きマトリクス表示"""
+    # インデックスを非表示にする
+    matrix_display = matrix_df.set_index('誤差率帯')
+    
+    # 加重平均行の数値を%表示に変換
+    def format_weighted_avg_values(df):
+        """加重平均行の数値を%形式でフォーマット"""
+        df_formatted = df.copy()
+        weighted_avg_idx = '加重平均誤差率（%）'
+        if weighted_avg_idx in df_formatted.index:
+            for col in df_formatted.columns:
+                val = df_formatted.loc[weighted_avg_idx, col]
+                if pd.notna(val) and isinstance(val, (int, float)):
+                    df_formatted.loc[weighted_avg_idx, col] = f"{val:.1f}%"
+                elif pd.isna(val):
+                    df_formatted.loc[weighted_avg_idx, col] = "N/A"
+        return df_formatted
+    
+    matrix_formatted = format_weighted_avg_values(matrix_display)
+    
+    # スタイル関数定義
+    def apply_comprehensive_styles(styler):
+        """包括的なスタイル適用"""
+        
+        # 基本的なテーブルスタイル
+        table_styles = [
+            # 全体的なフォント設定
+            {'selector': 'table', 'props': [('font-family', 'Arial, sans-serif'), ('border-collapse', 'collapse')]},
+            
+            # 行ヘッダー（誤差率帯）のスタイル
+            {'selector': 'th.row_heading', 'props': [
+                ('background-color', '#f8f9fa'),
+                ('font-weight', 'bold'),
+                ('text-align', 'center'),
+                ('border', '1px solid #dee2e6'),
+                ('padding', '8px')
+            ]},
+            
+            # 通常のセルスタイル
+            {'selector': 'td', 'props': [
+                ('text-align', 'center'),
+                ('border', '1px solid #dee2e6'),
+                ('padding', '8px')
+            ]},
+        ]
+        
+        # カラムヘッダーのスタイル（色分け）
+        for i, col in enumerate(matrix_formatted.columns):
+            if 'AI予測' in col:
+                color = COLOR_PALETTE["AI_pred"]
+            elif '計画01' in col:
+                color = COLOR_PALETTE["Plan_01"]
+            elif '計画02' in col:
+                color = COLOR_PALETTE["Plan_02"]
+            else:
+                color = '#6c757d'
+            
+            table_styles.append({
+                'selector': f'th.col_heading.level0.col{i}',
+                'props': [
+                    ('background-color', color),
+                    ('color', 'white'),
+                    ('font-weight', 'bold'),
+                    ('text-align', 'center'),
+                    ('border', '1px solid #dee2e6'),
+                    ('padding', '8px')
+                ]
+            })
+        
+        # グループ区切りのための境界線強化
+        group_boundaries = []
+        col_count = 0
+        for group_name in ['合計', 'A区分', 'B区分', 'C区分']:
+            if group_name == '合計':
+                col_count += 2  # AI予測 + 計画
+            elif any(f'{group_name.replace("区分", "")}区分' in abc for abc in abc_categories):
+                if col_count > 0:  # 前のグループとの境界
+                    table_styles.append({
+                        'selector': f'th.col_heading.level0.col{col_count}',
+                        'props': [('border-left', '3px solid #495057')]
+                    })
+                col_count += 2
+        
+        styler.set_table_styles(table_styles)
+        
+        return styler
+    
+    def highlight_special_rows(styler):
+        """特別な行（合計・加重平均）のハイライト"""
+        def row_styles(row):
+            styles = [''] * len(row)
+            row_name = row.name
+            
+            # 合計行と加重平均行を太字に
+            if row_name in MATRIX_DISPLAY_SETTINGS['bold_summary_rows']:
+                styles = ['font-weight: bold; background-color: #f8f9fa;'] * len(row)
+            
+            # 加重平均行にハッチング
+            if row_name in MATRIX_DISPLAY_SETTINGS['hatching_rows']:
+                hatching_style = 'background: repeating-linear-gradient(45deg, #e9ecef, #e9ecef 8px, #dee2e6 8px, #dee2e6 16px); font-weight: bold;'
+                styles = [hatching_style] * len(row)
+            
+            return styles
+        
+        return styler.apply(row_styles, axis=1)
+    
+    # 改善された凡例表示
+    st.markdown("### 📋 カラム凡例")
+    
+    # グループごとに整理された凡例
+    legend_cols = st.columns(len(abc_categories) + 1)
+    
+    with legend_cols[0]:
+        st.markdown(f"""
+        **合計**  
+        🔴 AI予測  
+        🔵 計画01
+        """)
+    
+    for i, abc in enumerate(abc_categories):
+        with legend_cols[i + 1]:
+            st.markdown(f"""
+            **{abc}区分**  
+            🔴 AI予測  
+            🔵 計画01
+            """)
     
     # スタイル適用
-    def highlight_weighted_avg(row):
-        return ['background-color: #f0f0f0' if row.name == len(matrix_df) - 1 else '' for _ in row]
+    styled_matrix = matrix_formatted.style.pipe(apply_comprehensive_styles).pipe(highlight_special_rows)
     
-    styled_df = matrix_df.style.apply(highlight_weighted_avg, axis=1)
-    
-    st.dataframe(styled_df, use_container_width=True)
-    
-def calculate_overall_weighted_average(matrix):
-    """全体加重平均誤差率計算"""
-    if matrix.empty:
-        return np.nan
-    
-    # 各カテゴリーの加重平均誤差率と件数を用いて全体平均を計算
-    total_weighted_sum = 0
-    total_count = 0
-    
-    for _, row in matrix.iterrows():
-        if not np.isnan(row['weighted_avg_error']) and row['count'] > 0:
-            total_weighted_sum += row['weighted_avg_error'] * row['count']
-            total_count += row['count']
-    
-    return total_weighted_sum / total_count if total_count > 0 else np.nan
+    # マトリクス表示
+    st.dataframe(styled_matrix, use_container_width=True)
 
 def display_basic_statistics(df, filter_settings):
-    """基本統計情報を統一形式で表示"""
+    """基本統計情報表示"""
     st.subheader("📈 基本統計情報")
     
     plan_col = filter_settings['plan_column']
     
-    # 統計データ作成
-    stats_data = {}
+    # AI予測と計画値の誤差率計算
+    ai_errors = calculate_error_rates(df, 'AI_pred', 'Actual')
+    plan_errors = calculate_error_rates(df, plan_col, 'Actual')
     
-    # AI予測値統計
-    ai_stats = df['AI_pred'].describe()
-    stats_data['AI予測値'] = ai_stats
-    
-    # 計画値統計
-    plan_name = '計画01' if plan_col == 'Plan_01' else '計画02'
-    plan_stats = df[plan_col].describe()
-    stats_data[plan_name] = plan_stats
-    
-    # 実績値統計
-    actual_stats = df['Actual'].describe()
-    stats_data['実績値'] = actual_stats
-    
-    # 統計表作成
-    stats_df = pd.DataFrame(stats_data)
-    
-    # インデックス名を日本語に変更
-    index_mapping = {
-        'count': '件数',
-        'mean': '平均',
-        'std': '標準偏差',
-        'min': '最小値',
-        '25%': '25%点',
-        '50%': '中央値',
-        '75%': '75%点',
-        'max': '最大値'
-    }
-    
-    stats_df.index = [index_mapping.get(idx, idx) for idx in stats_df.index]
-    
-    # 数値フォーマット適用
-    formatted_df = stats_df.style.format({
-        'AI予測値': '{:.1f}',
-        plan_name: '{:.1f}',
-        '実績値': '{:.1f}'
-    })
-    
-    st.dataframe(formatted_df, use_container_width=True)
-    
-    # 相関分析
-    st.subheader("🔗 相関分析")
     col1, col2 = st.columns(2)
     
     with col1:
-        ai_actual_corr = df['AI_pred'].corr(df['Actual'])
-        st.metric(
-            f"AI予測 vs 実績 相関係数",
-            f"{ai_actual_corr:.3f}",
-            help="1に近いほど正の相関が強い"
-        )
+        st.markdown("**AI予測の統計**")
+        ai_stats = {
+            '平均絶対誤差率': f"{ai_errors['absolute_error_rate'].mean()*100:.2f}%",
+            '加重平均誤差率': f"{calculate_weighted_average_error_rate(ai_errors, 'absolute_error_rate', 'Actual')*100:.2f}%",
+            '対象件数': len(ai_errors),
+            '計算不能件数': len(ai_errors[ai_errors['is_actual_zero']])
+        }
+        for key, value in ai_stats.items():
+            st.metric(key, value)
     
     with col2:
-        plan_actual_corr = df[plan_col].corr(df['Actual'])
-        st.metric(
-            f"{plan_name} vs 実績 相関係数",
-            f"{plan_actual_corr:.3f}",
-            help="1に近いほど正の相関が強い"
-        ) 
+        st.markdown(f"**{get_plan_name(plan_col)}の統計**")
+        plan_stats = {
+            '平均絶対誤差率': f"{plan_errors['absolute_error_rate'].mean()*100:.2f}%",
+            '加重平均誤差率': f"{calculate_weighted_average_error_rate(plan_errors, 'absolute_error_rate', 'Actual')*100:.2f}%",
+            '対象件数': len(plan_errors),
+            '計算不能件数': len(plan_errors[plan_errors['is_actual_zero']])
+        }
+        for key, value in plan_stats.items():
+            st.metric(key, value) 

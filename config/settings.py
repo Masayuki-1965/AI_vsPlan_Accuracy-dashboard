@@ -52,15 +52,29 @@ ABC_CLASSIFICATION_SETTINGS = {
     'min_gap': 0.01  # 1%
 }
 
-# 誤差率区分設定
+# 誤差率区分設定（新仕様）
 ERROR_RATE_CATEGORIES = [
-    {'min': 0.0, 'max': 0.1, 'label': '0-10%'},
-    {'min': 0.1, 'max': 0.2, 'label': '10-20%'},
-    {'min': 0.2, 'max': 0.3, 'label': '20-30%'},
-    {'min': 0.3, 'max': 0.5, 'label': '30-50%'},
-    {'min': 0.5, 'max': 1.0, 'label': '50-100%'},
-    {'min': 1.0, 'max': float('inf'), 'label': '100%超'}
+    {'min': 0.0, 'max': 0.1, 'label': '0 - 10%'},
+    {'min': 0.1, 'max': 0.2, 'label': '10 - 20%'},
+    {'min': 0.2, 'max': 0.3, 'label': '20 - 30%'},
+    {'min': 0.3, 'max': 0.5, 'label': '30 - 50%'},
+    {'min': 0.5, 'max': 1.0, 'label': '50 - 100%'},
+    {'min': 1.0, 'max': float('inf'), 'label': '100%以上'},
+    {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
 ]
+
+# マトリクス表示設定
+MATRIX_DISPLAY_SETTINGS = {
+    'show_index': False,  # 左側インデックス（0,1,2...）を非表示
+    'bold_summary_rows': ['合計（件数）', '加重平均誤差率（%）'],  # 太字で表示する行
+    'hatching_rows': ['加重平均誤差率（%）'],  # ハッチング適用行
+    'column_groups': {
+        '合計': ['合計_AI予測', '合計_計画'],
+        'A区分': ['A区分_AI予測', 'A区分_計画'],
+        'B区分': ['B区分_AI予測', 'B区分_計画'],
+        'C区分': ['C区分_AI予測', 'C区分_計画']
+    }
+}
 
 # データ検証設定
 VALIDATION_SETTINGS = {

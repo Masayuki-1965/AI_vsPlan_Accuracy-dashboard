@@ -3,7 +3,7 @@ import numpy as np
 
 def calculate_error_rates(df, plan_column, actual_column):
     """
-    誤差率を計算
+    誤差率を計算（分母：実績値）
     
     Parameters:
     df: DataFrame - データフレーム
@@ -15,18 +15,21 @@ def calculate_error_rates(df, plan_column, actual_column):
     """
     result_df = df.copy()
     
-    # ゼロ除算対策：計画値が0の場合はNaNにする
-    plan_values = result_df[plan_column].replace(0, np.nan)
-    actual_values = result_df[actual_column]
+    # ゼロ除算対策：実績値が0の場合はNaNにする（計算不能）
+    plan_values = result_df[plan_column]
+    actual_values = result_df[actual_column].replace(0, np.nan)
     
-    # 絶対誤差率 = |計画値 - 実績値| ÷ 計画値
-    result_df['absolute_error_rate'] = np.abs(plan_values - actual_values) / plan_values
+    # 絶対誤差率 = |計画値 - 実績値| ÷ 実績値
+    result_df['absolute_error_rate'] = np.abs(plan_values - actual_values) / actual_values
     
-    # 正の誤差率・負の誤差率 = (計画値 - 実績値) ÷ 計画値
-    error_rate = (plan_values - actual_values) / plan_values
+    # 正の誤差率・負の誤差率 = (計画値 - 実績値) ÷ 実績値
+    error_rate = (plan_values - actual_values) / actual_values
     result_df['error_rate'] = error_rate
     result_df['positive_error_rate'] = error_rate.where(error_rate >= 0)
     result_df['negative_error_rate'] = error_rate.where(error_rate < 0)
+    
+    # 実績がゼロの場合の判定フラグ
+    result_df['is_actual_zero'] = result_df[actual_column] == 0
     
     return result_df
 
@@ -59,7 +62,7 @@ def calculate_weighted_average_error_rate(df, error_rate_column, weight_column):
 
 def categorize_error_rates(df, error_rate_column):
     """
-    誤差率を区分に分類
+    誤差率を区分に分類（新仕様対応）
     
     Parameters:
     df: DataFrame - データフレーム
@@ -68,31 +71,38 @@ def categorize_error_rates(df, error_rate_column):
     Returns:
     Series - 誤差率区分
     """
-    error_rates = df[error_rate_column].fillna(0).abs()  # NaNを0に、絶対値を取る
+    from config.settings import ERROR_RATE_CATEGORIES
     
-    conditions = [
-        error_rates <= 0.1,
-        (error_rates > 0.1) & (error_rates <= 0.2),
-        (error_rates > 0.2) & (error_rates <= 0.3),
-        (error_rates > 0.3) & (error_rates <= 0.5),
-        (error_rates > 0.5) & (error_rates <= 1.0),
-        error_rates > 1.0
-    ]
+    # 実績がゼロの場合を最初にチェック
+    is_actual_zero = df.get('is_actual_zero', pd.Series([False] * len(df), index=df.index))
     
-    choices = [
-        '0-10%',
-        '10-20%',
-        '20-30%',
-        '30-50%',
-        '50-100%',
-        '100%超'
-    ]
+    # 実績ゼロの場合は計算不能として分類
+    result = pd.Series(['計算不能（実績ゼロ）'] * len(df), index=df.index, name='error_rate_category')
     
-    return pd.Series(
-        np.select(conditions, choices, default='未分類'),
-        index=df.index,
-        name='error_rate_category'
-    )
+    # 実績がゼロでない場合のみ誤差率で分類
+    valid_mask = ~is_actual_zero
+    if valid_mask.any():
+        error_rates = df.loc[valid_mask, error_rate_column].fillna(0).abs()
+        
+        conditions = []
+        choices = []
+        
+        for category in ERROR_RATE_CATEGORIES:
+            if 'special' not in category:  # 通常の誤差率区分
+                min_val = category['min']
+                max_val = category['max']
+                if max_val == float('inf'):
+                    condition = error_rates > min_val
+                else:
+                    condition = (error_rates >= min_val) & (error_rates < max_val)
+                conditions.append(condition)
+                choices.append(category['label'])
+        
+        # 有効なデータに対して誤差率区分を適用
+        valid_categories = np.select(conditions, choices, default='未分類')
+        result.loc[valid_mask] = valid_categories
+    
+    return result
 
 def create_error_matrix(df, group_columns=None):
     """

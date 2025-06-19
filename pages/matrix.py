@@ -200,16 +200,16 @@ def create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categori
     
     matrix_data.append(total_row)
     
-    # 加重平均誤差率行の追加
+    # 加重平均誤差率行の追加（文字列として直接保存）
     weighted_avg_row = {'誤差率帯': '加重平均誤差率（%）'}
     
-    # 全体の加重平均（数値として保存）
+    # 全体の加重平均（直接%文字列として保存）
     ai_weighted_avg = calculate_weighted_average_error_rate(ai_errors, error_col, 'Actual') * 100
     plan_weighted_avg = calculate_weighted_average_error_rate(plan_errors, error_col, 'Actual') * 100
-    weighted_avg_row['合計_AI予測'] = ai_weighted_avg if not pd.isna(ai_weighted_avg) else None
-    weighted_avg_row[f'合計_{get_plan_name(plan_col)}'] = plan_weighted_avg if not pd.isna(plan_weighted_avg) else None
+    weighted_avg_row['合計_AI予測'] = f"{ai_weighted_avg:.1f}%" if not pd.isna(ai_weighted_avg) else "N/A"
+    weighted_avg_row[f'合計_{get_plan_name(plan_col)}'] = f"{plan_weighted_avg:.1f}%" if not pd.isna(plan_weighted_avg) else "N/A"
     
-    # ABC区分別の加重平均（数値として保存）
+    # ABC区分別の加重平均（直接%文字列として保存）
     for abc in abc_categories:
         if 'Class_abc' in ai_errors.columns:
             ai_abc_data = ai_errors[ai_errors['Class_abc'] == abc]
@@ -218,11 +218,11 @@ def create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categori
             ai_abc_weighted = calculate_weighted_average_error_rate(ai_abc_data, error_col, 'Actual') * 100
             plan_abc_weighted = calculate_weighted_average_error_rate(plan_abc_data, error_col, 'Actual') * 100
             
-            weighted_avg_row[f'{abc}区分_AI予測'] = ai_abc_weighted if not pd.isna(ai_abc_weighted) else None
-            weighted_avg_row[f'{abc}区分_{get_plan_name(plan_col)}'] = plan_abc_weighted if not pd.isna(plan_abc_weighted) else None
+            weighted_avg_row[f'{abc}区分_AI予測'] = f"{ai_abc_weighted:.1f}%" if not pd.isna(ai_abc_weighted) else "N/A"
+            weighted_avg_row[f'{abc}区分_{get_plan_name(plan_col)}'] = f"{plan_abc_weighted:.1f}%" if not pd.isna(plan_abc_weighted) else "N/A"
         else:
-            weighted_avg_row[f'{abc}区分_AI予測'] = None
-            weighted_avg_row[f'{abc}区分_{get_plan_name(plan_col)}'] = None
+            weighted_avg_row[f'{abc}区分_AI予測'] = "N/A"
+            weighted_avg_row[f'{abc}区分_{get_plan_name(plan_col)}'] = "N/A"
     
     matrix_data.append(weighted_avg_row)
     
@@ -266,138 +266,160 @@ def get_error_rate_bands_with_signs(error_type):
     return bands
 
 def display_styled_matrix(matrix_df, abc_categories):
-    """スタイル付きマトリクス表示"""
+    """スタイル付きマトリクス表示（HTML方式）"""
     # インデックスを非表示にする
     matrix_display = matrix_df.set_index('誤差率帯')
     
-    # 加重平均行の数値を%表示に変換
-    def format_weighted_avg_values(df):
-        """加重平均行の数値を%形式でフォーマット"""
+    # 件数を整数表示に変換
+    def format_integer_values(df):
+        """件数を整数形式でフォーマット"""
         df_formatted = df.copy()
-        weighted_avg_idx = '加重平均誤差率（%）'
-        if weighted_avg_idx in df_formatted.index:
-            for col in df_formatted.columns:
-                val = df_formatted.loc[weighted_avg_idx, col]
-                if pd.notna(val) and isinstance(val, (int, float)):
-                    df_formatted.loc[weighted_avg_idx, col] = f"{val:.1f}%"
-                elif pd.isna(val):
-                    df_formatted.loc[weighted_avg_idx, col] = "N/A"
+        for idx in df_formatted.index:
+            if idx not in ['加重平均誤差率（%）']:  # 加重平均行以外
+                for col in df_formatted.columns:
+                    val = df_formatted.loc[idx, col]
+                    if pd.notna(val) and isinstance(val, (int, float)):
+                        df_formatted.loc[idx, col] = int(val)
         return df_formatted
     
-    matrix_formatted = format_weighted_avg_values(matrix_display)
+    matrix_formatted = format_integer_values(matrix_display)
     
-    # スタイル関数定義
-    def apply_comprehensive_styles(styler):
-        """包括的なスタイル適用"""
-        
-        # 基本的なテーブルスタイル
-        table_styles = [
-            # 全体的なフォント設定
-            {'selector': 'table', 'props': [('font-family', 'Arial, sans-serif'), ('border-collapse', 'collapse')]},
-            
-            # 行ヘッダー（誤差率帯）のスタイル
-            {'selector': 'th.row_heading', 'props': [
-                ('background-color', '#f8f9fa'),
-                ('font-weight', 'bold'),
-                ('text-align', 'center'),
-                ('border', '1px solid #dee2e6'),
-                ('padding', '8px')
-            ]},
-            
-            # 通常のセルスタイル
-            {'selector': 'td', 'props': [
-                ('text-align', 'center'),
-                ('border', '1px solid #dee2e6'),
-                ('padding', '8px')
-            ]},
-        ]
-        
-        # カラムヘッダーのスタイル（色分け）
-        for i, col in enumerate(matrix_formatted.columns):
-            if 'AI予測' in col:
-                color = COLOR_PALETTE["AI_pred"]
-            elif '計画01' in col:
-                color = COLOR_PALETTE["Plan_01"]
-            elif '計画02' in col:
-                color = COLOR_PALETTE["Plan_02"]
-            else:
-                color = '#6c757d'
-            
-            table_styles.append({
-                'selector': f'th.col_heading.level0.col{i}',
-                'props': [
-                    ('background-color', color),
-                    ('color', 'white'),
-                    ('font-weight', 'bold'),
-                    ('text-align', 'center'),
-                    ('border', '1px solid #dee2e6'),
-                    ('padding', '8px')
-                ]
-            })
-        
-        # グループ区切りのための境界線強化
-        group_boundaries = []
-        col_count = 0
-        for group_name in ['合計', 'A区分', 'B区分', 'C区分']:
-            if group_name == '合計':
-                col_count += 2  # AI予測 + 計画
-            elif any(f'{group_name.replace("区分", "")}区分' in abc for abc in abc_categories):
-                if col_count > 0:  # 前のグループとの境界
-                    table_styles.append({
-                        'selector': f'th.col_heading.level0.col{col_count}',
-                        'props': [('border-left', '3px solid #495057')]
-                    })
-                col_count += 2
-        
-        styler.set_table_styles(table_styles)
-        
-        return styler
-    
-    def highlight_special_rows(styler):
-        """特別な行（合計・加重平均）のハイライト"""
-        def row_styles(row):
-            styles = [''] * len(row)
-            row_name = row.name
-            
-            # 合計行と加重平均行を太字に
-            if row_name in MATRIX_DISPLAY_SETTINGS['bold_summary_rows']:
-                styles = ['font-weight: bold; background-color: #f8f9fa;'] * len(row)
-            
-            # 加重平均行にハッチング
-            if row_name in MATRIX_DISPLAY_SETTINGS['hatching_rows']:
-                hatching_style = 'background: repeating-linear-gradient(45deg, #e9ecef, #e9ecef 8px, #dee2e6 8px, #dee2e6 16px); font-weight: bold;'
-                styles = [hatching_style] * len(row)
-            
-            return styles
-        
-        return styler.apply(row_styles, axis=1)
-    
-    # 改善された凡例表示
+    # 簡素化された凡例表示
     st.markdown("### 📋 カラム凡例")
+    st.markdown("🔴 AI予測　🔵 計画01")
     
-    # グループごとに整理された凡例
-    legend_cols = st.columns(len(abc_categories) + 1)
+    # HTMLテーブルを直接生成
+    def create_html_table(df):
+        """カスタムHTMLテーブル生成"""
+        
+        # グループ色定義
+        group_colors = {
+            '合計': '#f8f9fa',
+            'A': '#fff3cd', 
+            'B': '#d1ecf1',
+            'C': '#d4edda'
+        }
+        
+        # HTML開始
+        html = """
+        <style>
+        .custom-matrix-table {
+            font-family: Arial, sans-serif;
+            border-collapse: collapse;
+            width: 100%;
+            margin: 20px 0;
+        }
+        .custom-matrix-table th {
+            border: 2px solid #dee2e6;
+            padding: 12px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .custom-matrix-table td {
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            text-align: center;
+        }
+        .header-ai { background-color: #FF6B6B; color: white; }
+        .header-plan01 { background-color: #4ECDC4; color: white; }
+        .header-plan02 { background-color: #45B7D1; color: white; }
+        .header-row { background-color: #f8f9fa; }
+        .group-total { background-color: #f8f9fa; }
+        .group-a { background-color: #fff3cd; }
+        .group-b { background-color: #d1ecf1; }
+        .group-c { background-color: #d4edda; }
+        .border-left { border-left: 4px solid #495057 !important; }
+        .bold-row { font-weight: bold; background-color: #e9ecef; }
+        .hatching-row { 
+            font-weight: bold; 
+            background: repeating-linear-gradient(
+                45deg,
+                #f8f9fa,
+                #f8f9fa 10px,
+                #e9ecef 10px,
+                #e9ecef 20px
+            );
+        }
+        </style>
+        <table class="custom-matrix-table">
+        """
+        
+        # ヘッダー行
+        html += "<thead><tr><th class='header-row'>誤差率帯</th>"
+        
+        for col in df.columns:
+            css_class = ""
+            border_class = ""
+            
+            # カラムヘッダーの色分け
+            if 'AI予測' in col:
+                css_class = "header-ai"
+            elif '計画01' in col:
+                css_class = "header-plan01"
+            elif '計画02' in col:
+                css_class = "header-plan02"
+            
+            # グループ境界線
+            if 'A区分' in col and col.endswith('_AI予測'):
+                border_class = "border-left"
+            elif 'B区分' in col and col.endswith('_AI予測'):
+                border_class = "border-left"
+            elif 'C区分' in col and col.endswith('_AI予測'):
+                border_class = "border-left"
+            
+            html += f"<th class='{css_class} {border_class}'>{col}</th>"
+        
+        html += "</tr></thead><tbody>"
+        
+        # データ行
+        for idx, row in df.iterrows():
+            row_class = ""
+            
+            # 特別な行のスタイル
+            if idx == '合計（件数）':
+                row_class = "bold-row"
+            elif idx == '加重平均誤差率（%）':
+                row_class = "hatching-row"
+            
+            html += f"<tr class='{row_class}'>"
+            html += f"<th class='header-row'>{idx}</th>"
+            
+            for col_idx, (col, val) in enumerate(row.items()):
+                cell_class = ""
+                border_class = ""
+                
+                # グループ背景色
+                if '合計' in col:
+                    cell_class = "group-total"
+                elif 'A区分' in col:
+                    cell_class = "group-a"
+                elif 'B区分' in col:
+                    cell_class = "group-b"
+                elif 'C区分' in col:
+                    cell_class = "group-c"
+                
+                # グループ境界線
+                if 'A区分' in col and col.endswith('_AI予測'):
+                    border_class = "border-left"
+                elif 'B区分' in col and col.endswith('_AI予測'):
+                    border_class = "border-left"
+                elif 'C区分' in col and col.endswith('_AI予測'):
+                    border_class = "border-left"
+                
+                html += f"<td class='{cell_class} {border_class}'>{val}</td>"
+            
+            html += "</tr>"
+        
+        html += "</tbody></table>"
+        return html
     
-    with legend_cols[0]:
-        st.markdown(f"""
-        **合計**  
-        🔴 AI予測  
-        🔵 計画01
-        """)
+    # HTMLテーブル表示
+    html_table = create_html_table(matrix_formatted)
+    st.markdown(html_table, unsafe_allow_html=True)
     
-    for i, abc in enumerate(abc_categories):
-        with legend_cols[i + 1]:
-            st.markdown(f"""
-            **{abc}区分**  
-            🔴 AI予測  
-            🔵 計画01
-            """)
-    
-    # スタイル適用
-    styled_matrix = matrix_formatted.style.pipe(apply_comprehensive_styles).pipe(highlight_special_rows)
-    
-    # マトリクス表示
-    st.dataframe(styled_matrix, use_container_width=True)
+    # 参考用に通常のDataFrameも表示（デバッグ用）
+    with st.expander("📊 データ確認用（通常表示）"):
+        st.dataframe(matrix_formatted, use_container_width=True)
 
 def display_basic_statistics(df, filter_settings):
     """基本統計情報表示"""

@@ -3,7 +3,13 @@ import pandas as pd
 import numpy as np
 import chardet
 from utils.validators import validate_data, validate_required_columns
-from utils.data_processor import preview_data
+from utils.data_processor import (
+    preview_data, 
+    calculate_abc_classification, 
+    validate_abc_categories, 
+    get_abc_classification_summary
+)
+from config.settings import ABC_CLASSIFICATION_SETTINGS
 
 def show():
     """データアップロードページを表示"""
@@ -22,6 +28,10 @@ def show():
         st.session_state.encoding_info = None
     if 'mapping_completed' not in st.session_state:
         st.session_state.mapping_completed = False
+    if 'abc_categories' not in st.session_state:
+        st.session_state.abc_categories = ABC_CLASSIFICATION_SETTINGS['default_categories'].copy()
+    if 'abc_auto_generate' not in st.session_state:
+        st.session_state.abc_auto_generate = True
     
     # アップロードセクション
     st.subheader("1. CSVファイルアップロード")
@@ -107,6 +117,27 @@ def show():
                 help="基準となる計画値（必須）"
             )
             
+            # ABC区分を必須項目として追加
+            st.markdown("**ABC区分設定（必須）**")
+            mapping['Class_abc'] = st.selectbox(
+                "ABC区分カラム",
+                options=[''] + st.session_state.data_columns,
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
+                help="CSVファイルにABC区分カラムがある場合は選択してください"
+            )
+            
+            # ABC区分の自動生成設定
+            abc_has_column = bool(mapping['Class_abc'])
+            if not abc_has_column:
+                st.info("💡 ABC区分カラムが選択されていないため、実績値に基づいて自動生成されます")
+                st.session_state.abc_auto_generate = True
+            else:
+                st.session_state.abc_auto_generate = st.checkbox(
+                    "ABC区分を自動生成で上書きする", 
+                    value=False,
+                    help="チェックすると、CSVのABC区分を無視して実績値から自動計算します"
+                )
+            
         with col2:
             st.markdown("**任意項目**")
             mapping['Class_01'] = st.selectbox(
@@ -121,12 +152,6 @@ def show():
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_02', '')),
                 help="商品分類・カテゴリ2（任意）"
             )
-            mapping['Class_abc'] = st.selectbox(
-                "ABC区分",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
-                help="ABC分析による区分（任意）"
-            )
             mapping['Plan_02'] = st.selectbox(
                 "計画値02",
                 options=[''] + st.session_state.data_columns,
@@ -137,27 +162,179 @@ def show():
         # 現在のマッピング状態を更新
         st.session_state.current_mapping = mapping
         
+        # ABC区分設定エクスパンダー（常に表示）
+        with st.expander("🔧 ABC区分自動生成設定", expanded=st.session_state.abc_auto_generate):
+                # 現在の状態表示
+                if st.session_state.abc_auto_generate:
+                    st.success("🟢 **自動生成モード**: 実績値に基づいてABC区分を自動計算します")
+                else:
+                    st.info("🟡 **手動指定モード**: CSVファイルのABC区分カラムを使用します")
+                
+                st.markdown("### 自動生成時の区分設定")
+                st.markdown("実績値の多い順にソートし、累積構成比に基づいて以下の区分を割り当てます：")
+                
+                # 現在の区分設定を表示・編集
+                categories_df = pd.DataFrame(st.session_state.abc_categories)
+                
+                # 区分の追加
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_category_name = st.selectbox(
+                        "追加する区分",
+                        options=[''] + [cat['name'] for cat in ABC_CLASSIFICATION_SETTINGS['additional_categories']],
+                        help="D, E, F, G, H, Z区分を追加できます"
+                    )
+                with col2:
+                    if new_category_name and st.button("区分を追加"):
+                        # 既存の区分名と重複チェック
+                        existing_names = [cat['name'] for cat in st.session_state.abc_categories]
+                        if new_category_name not in existing_names:
+                            # 新しい区分を末尾に追加（デフォルト範囲は最後の区分の後）
+                            last_end = max([cat['end_ratio'] for cat in st.session_state.abc_categories]) if st.session_state.abc_categories else 0.0
+                            new_category = {
+                                'name': new_category_name,
+                                'start_ratio': last_end,
+                                'end_ratio': min(1.0, last_end + 0.1),
+                                'description': f'{new_category_name}区分'
+                            }
+                            st.session_state.abc_categories.append(new_category)
+                            st.rerun()
+                        else:
+                            st.warning(f"区分 '{new_category_name}' は既に存在します")
+                
+                # 区分設定の編集
+                st.markdown("### 構成比範囲設定")
+                edited_categories = []
+                
+                for i, category in enumerate(st.session_state.abc_categories):
+                    col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
+                    
+                    with col1:
+                        st.text(category['name'])
+                    
+                    with col2:
+                        start_ratio = st.number_input(
+                            f"開始%",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=category['start_ratio'] * 100,
+                            step=1.0,
+                            key=f"start_{i}",
+                            help="この区分の開始構成比（%）"
+                        ) / 100.0
+                    
+                    with col3:
+                        end_ratio = st.number_input(
+                            f"終了%",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=category['end_ratio'] * 100,
+                            step=1.0,
+                            key=f"end_{i}",
+                            help="この区分の終了構成比（%）"
+                        ) / 100.0
+                    
+                    with col4:
+                        if len(st.session_state.abc_categories) > 1:  # 最低1つは残す
+                            if st.button("🗑️", key=f"delete_{i}", help="この区分を削除"):
+                                st.session_state.abc_categories.pop(i)
+                                st.rerun()
+                    
+                    edited_categories.append({
+                        'name': category['name'],
+                        'start_ratio': start_ratio,
+                        'end_ratio': end_ratio,
+                        'description': category.get('description', f'{category["name"]}区分')
+                    })
+                
+                # 設定の妥当性チェック
+                is_valid, error_msg = validate_abc_categories(edited_categories)
+                if not is_valid:
+                    st.error(f"❌ 区分設定エラー: {error_msg}")
+                else:
+                    st.session_state.abc_categories = edited_categories
+                    st.success("✅ 区分設定が有効です")
+                
+                # デフォルトに戻すボタン
+                if st.button("デフォルト設定に戻す"):
+                    st.session_state.abc_categories = ABC_CLASSIFICATION_SETTINGS['default_categories'].copy()
+                    st.rerun()
+        
         # マッピング確認・保存
         if st.button("マッピング設定を適用", type="primary"):
-            # 必須項目チェック
+            # 必須項目チェック（ABC区分は除く - 自動生成するため）
             required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
             missing_fields = [field for field in required_fields if not mapping[field]]
             
             if missing_fields:
                 st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
             else:
-                # データ変換
-                mapped_df = apply_mapping(df, mapping)
-                
-                # 基本検証
-                if validate_mapped_data(mapped_df):
-                    st.session_state.data = mapped_df
-                    st.session_state.mapping = mapping
-                    st.session_state.mapping_completed = True
-                    st.success("✅ データマッピング完了！他のページで分析を開始できます。")
-                    st.rerun()
-                else:
-                    st.error("❌ データ検証でエラーが発生しました")
+                try:
+                    # データ変換
+                    mapped_df = apply_mapping(df, mapping)
+                    
+                    # ABC区分の処理
+                    abc_needs_generation = st.session_state.abc_auto_generate or not mapping.get('Class_abc')
+                    
+                    if abc_needs_generation:
+                        # ABC区分を自動生成
+                        with st.status("🔄 ABC区分を自動生成中...", expanded=True) as status:
+                            st.write("📊 実績値データを分析中...")
+                            
+                            # 区分設定の妥当性チェック
+                            is_valid, error_msg = validate_abc_categories(st.session_state.abc_categories)
+                            if not is_valid:
+                                st.error(f"❌ ABC区分設定エラー: {error_msg}")
+                                status.update(label="❌ ABC区分設定エラー", state="error")
+                                return
+                            
+                            st.write("🔢 商品コード別実績値を集計中...")
+                            
+                            # ABC区分を計算
+                            try:
+                                mapped_df = calculate_abc_classification(
+                                    mapped_df, 
+                                    categories=st.session_state.abc_categories,
+                                    base_column='Actual'
+                                )
+                                st.write("✅ ABC区分の割り当て完了")
+                                
+                                # 生成結果の表示
+                                abc_summary = get_abc_classification_summary(mapped_df, 'Class_abc', 'Actual')
+                                if abc_summary:
+                                    st.write("📈 集計結果:")
+                                    
+                                    # 各区分の詳細情報
+                                    for category in sorted(st.session_state.abc_categories, key=lambda x: x['start_ratio']):
+                                        cat_name = category['name']
+                                        count = abc_summary['counts'].get(cat_name, 0)
+                                        ratio = abc_summary['ratios'].get(cat_name, 0)
+                                        range_text = f"{category['start_ratio']*100:.0f}%-{category['end_ratio']*100:.0f}%"
+                                        st.write(f"　• {cat_name}区分({range_text}): {count}件 ({ratio:.1f}%)")
+                                    
+                                    status.update(label="✅ ABC区分自動生成完了", state="complete")
+                                else:
+                                    st.warning("⚠️ ABC区分の集計に問題があります")
+                                    
+                            except Exception as e:
+                                st.error(f"❌ ABC区分計算エラー: {str(e)}")
+                                status.update(label="❌ ABC区分計算エラー", state="error")
+                                return
+                    else:
+                        st.info("📋 CSVファイルのABC区分カラムを使用します")
+                    
+                    # 基本検証
+                    if validate_mapped_data(mapped_df):
+                        st.session_state.data = mapped_df
+                        st.session_state.mapping = mapping
+                        st.session_state.mapping_completed = True
+                        st.success("✅ データマッピング完了！他のページで分析を開始できます。")
+                        st.rerun()
+                    else:
+                        st.error("❌ データ検証でエラーが発生しました")
+                        
+                except Exception as e:
+                    st.error(f"❌ データ処理エラー: {str(e)}")
         
         # マッピング完了後の表示
         if st.session_state.mapping_completed and st.session_state.data is not None:
@@ -172,6 +349,27 @@ def show():
             # 変換後データプレビュー
             st.subheader("5. 変換後データプレビュー")
             st.dataframe(st.session_state.data.head(), use_container_width=True)
+            
+            # ABC区分の集計結果表示
+            if 'Class_abc' in st.session_state.data.columns:
+                st.subheader("6. ABC区分集計結果")
+                abc_summary = get_abc_classification_summary(st.session_state.data, 'Class_abc', 'Actual')
+                
+                if abc_summary:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**件数分布**")
+                        counts_df = pd.DataFrame(list(abc_summary['counts'].items()), 
+                                                columns=['ABC区分', '件数'])
+                        st.dataframe(counts_df, use_container_width=True)
+                    
+                    with col2:
+                        if 'ratios' in abc_summary:
+                            st.markdown("**実績値構成比**")
+                            ratios_df = pd.DataFrame(list(abc_summary['ratios'].items()), 
+                                                    columns=['ABC区分', '構成比(%)'])
+                            st.dataframe(ratios_df, use_container_width=True)
     
     # 既にデータが読み込まれている場合の情報表示
     if st.session_state.data is not None:
@@ -427,12 +625,17 @@ def has_japanese_characters(text):
 def validate_mapped_data(df):
     """マッピング後のデータを検証"""
     try:
-        # 必須カラムの存在確認
+        # 必須カラムの存在確認（ABC区分は自動生成されるため除外）
         required_cols = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
         for col in required_cols:
             if col not in df.columns:
                 st.error(f"必須カラムが見つかりません: {col}")
                 return False
+        
+        # ABC区分の存在確認（必須）
+        if 'Class_abc' not in df.columns:
+            st.error("ABC区分が生成されていません")
+            return False
         
         # データ型チェック
         numeric_cols = ['Actual', 'AI_pred', 'Plan_01']

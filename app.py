@@ -11,6 +11,50 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Streamlit Cloud環境でのページナビゲーションを無効化
+if hasattr(st, '_get_session_state'):
+    try:
+        st.session_state._pages = {}
+    except:
+        pass
+
+# サイドバー上部のファイル名リスト（app, matrix, scatter, upload）のみを非表示
+st.markdown("""
+<style>
+    /* Streamlitのデフォルトページナビゲーション（上部のファイル名リスト）を非表示 */
+    .stSidebar [data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+    
+    /* 上部のファイル名リスト部分を確実に非表示 */
+    .stSidebar .css-1oe5cao,
+    .stSidebar .css-1d391kg,
+    .stSidebar .css-10trblm,
+    .stSidebar .css-184tjsw {
+        display: none !important;
+    }
+    
+    /* ページナビゲーション関連要素を非表示 */
+    .stSidebar ul[role="tablist"],
+    .stSidebar nav[role="navigation"] {
+        display: none !important;
+    }
+    
+    /* サイドバーの最初の子要素（通常ファイルリスト）を非表示 */
+    .stSidebar > div > div > div:first-child:not(:only-child) {
+        display: none !important;
+    }
+    
+    /* ただし、タイトルや重要なナビゲーションは保持 */
+    .stSidebar .element-container:has(h1),
+    .stSidebar .element-container:has(.stSelectbox),
+    .stSidebar .element-container:has(.stSuccess),
+    .stSidebar .element-container:has(.stWarning) {
+        display: block !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # タイトル
 st.title("📊 需要予測vs計画値比較分析ダッシュボード")
 st.markdown("---")

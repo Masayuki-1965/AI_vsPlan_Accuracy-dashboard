@@ -47,13 +47,12 @@ def show():
         if st.session_state.uploaded_filename != uploaded_file.name:
             try:
                 # データ読み込み（エンコーディング自動判別）
-                df, encoding_info = read_csv_with_encoding(uploaded_file)
+                df, _ = read_csv_with_encoding(uploaded_file)
                 
                 # セッション状態に保存
                 st.session_state.original_data = df
                 st.session_state.uploaded_filename = uploaded_file.name
                 st.session_state.data_columns = list(df.columns)
-                st.session_state.encoding_info = encoding_info
                 st.session_state.current_mapping = {}
                 st.session_state.mapping_completed = False
                 
@@ -68,9 +67,7 @@ def show():
         df = st.session_state.original_data
         
         # ファイル情報表示
-        if st.session_state.encoding_info:
-            st.info(f"📁 読み込み済みファイル: {st.session_state.uploaded_filename}")
-            st.info(f"🔍 {st.session_state.encoding_info}")
+        st.info(f"📁 読み込み済みファイル: {st.session_state.uploaded_filename}")
         
         # データプレビュー
         st.subheader("2. データプレビュー")
@@ -123,7 +120,7 @@ def show():
                 "ABC区分カラム",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
-                help="CSVファイルにABC区分カラムがある場合は選択してください"
+                help="CSVファイルにABC区分がある場合は選択してください"
             )
             
             # ABC区分の自動生成設定
@@ -466,9 +463,8 @@ def read_csv_with_encoding(uploaded_file):
     # 最良の結果を採用
     if best_result and best_score >= 2:  # 最低限の品質を満たす場合
         df, successful_encoding, score = best_result
-        success_info = f"✅ エンコーディング '{successful_encoding.upper()}' で読み込み成功 (品質スコア: {score}/10)"
-        debug_info = f"🔧 試行結果: {' | '.join(encoding_results)}"
-        return df, f"{encoding_info}\n{success_info}\n{debug_info}"
+        # 一般ユーザー向けにシンプルなメッセージを返す
+        return df, f"✅ ファイル読み込み完了"
     
     # すべて失敗した場合
     if last_error:

@@ -187,7 +187,8 @@ def show():
                         help="D区分, E区分, F区分, G区分, H区分, Z区分を追加できます"
                     )
                 with col2:
-                    st.write("")  # ラベルと高さを合わせるための空白
+                    # プルダウンのラベル高さに合わせるため調整
+                    st.write("")  # ラベル分の高さ調整（selectboxのラベルと合わせる）
                     if st.button("区分を追加する", type="primary", disabled=not new_category_display):
                         # 表示名から区分名を抽出（「D区分」→「D」）
                         new_category_name = new_category_display.replace('区分', '')
@@ -235,10 +236,9 @@ def show():
                     col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
                     
                     with col1:
-                        # 区分名を入力欄と同じ高さにするため、number_inputと同じスタイルで配置
+                        # 区分名を入力欄と同じ高さに調整
+                        st.write("")  # ラベル分の高さ調整
                         st.markdown(f"**{category['name']}区分**")
-                        # 縦方向の位置調整のため少し空白を追加
-                        st.write("")
                     
                     with col2:
                         # 開始構成比率は自動設定（編集不可）
@@ -300,9 +300,13 @@ def show():
                     
                     with col4:
                         if len(st.session_state.abc_categories) > 1:  # 最低1つは残す
+                            # 削除ボタンを入力フィールドと同じ高さに調整
+                            st.write("")  # ラベル分の高さ調整
                             if st.button("🗑️", key=f"delete_{i}", help="この区分を削除"):
                                 st.session_state.abc_categories.pop(i)
                                 st.rerun()
+                        else:
+                            st.write("")  # 空白で高さを合わせる
                     
                     edited_categories.append({
                         'name': category['name'],
@@ -414,7 +418,7 @@ def show():
                     data_type = str(st.session_state.data[k].dtype) if k in st.session_state.data.columns else "未設定"
                     mapping_data.append({
                         "システム項目": system_item_display,
-                        "CSVカラム": v,
+                        "CSVのカラム名": v,
                         "データ型": data_type
                     })
             

@@ -9,7 +9,7 @@ from utils.data_processor import (
     validate_abc_categories, 
     get_abc_classification_summary
 )
-from config.settings import ABC_CLASSIFICATION_SETTINGS
+from config.settings import ABC_CLASSIFICATION_SETTINGS, COLUMN_MAPPING
 
 def show():
     """データアップロードページを表示"""
@@ -70,8 +70,11 @@ def show():
         st.info(f"📁 読み込み済みファイル: {st.session_state.uploaded_filename}")
         
         # データプレビュー
-        st.subheader("2. データプレビュー")
-        st.dataframe(df.head(10), use_container_width=True)
+        st.subheader("2. データプレビュー（上位10件表示）")
+        # インデックスを1始まりに変更
+        preview_df = df.head(10).copy()
+        preview_df.index = range(1, len(preview_df) + 1)
+        st.dataframe(preview_df, use_container_width=True)
         
         # データマッピング
         st.subheader("3. データマッピング設定")
@@ -117,7 +120,7 @@ def show():
             # ABC区分を必須項目として追加
             st.markdown("**ABC区分設定（必須）**")
             mapping['Class_abc'] = st.selectbox(
-                "ABC区分カラム",
+                "ABC区分",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
                 help="CSVファイルにABC区分がある場合は選択してください"
@@ -126,7 +129,7 @@ def show():
             # ABC区分の自動生成設定
             abc_has_column = bool(mapping['Class_abc'])
             if not abc_has_column:
-                st.info("💡 ABC区分カラムが選択されていないため、実績値に基づいて自動生成されます")
+                st.info("💡 ABC区分が選択されていないため、実績値に基づいて自動生成されます")
                 st.session_state.abc_auto_generate = True
             else:
                 st.session_state.abc_auto_generate = st.checkbox(
@@ -165,24 +168,30 @@ def show():
                 if st.session_state.abc_auto_generate:
                     st.success("🟢 **自動生成モード**: 実績値に基づいてABC区分を自動計算します")
                 else:
-                    st.info("🟡 **手動指定モード**: CSVファイルのABC区分カラムを使用します")
+                    st.info("🟡 **手動指定モード**: CSVファイルのABC区分を使用します")
                 
-                st.markdown("### 自動生成時の区分設定")
-                st.markdown("実績値の多い順にソートし、累積構成比に基づいて以下の区分を割り当てます：")
+                st.markdown("### 自動生成時の区分追加")
+                st.markdown("実績値の多い順にソートし、累積構成比率をもとに以下の区分を割り当てます：")
                 
                 # 現在の区分設定を表示・編集
                 categories_df = pd.DataFrame(st.session_state.abc_categories)
                 
                 # 区分の追加
-                col1, col2 = st.columns(2)
+                col1, col2 = st.columns([3, 1])
                 with col1:
-                    new_category_name = st.selectbox(
+                    # 追加可能な区分を「区分」付きで表示
+                    additional_options = [''] + [f"{cat['name']}区分" for cat in ABC_CLASSIFICATION_SETTINGS['additional_categories']]
+                    new_category_display = st.selectbox(
                         "追加する区分",
-                        options=[''] + [cat['name'] for cat in ABC_CLASSIFICATION_SETTINGS['additional_categories']],
-                        help="D, E, F, G, H, Z区分を追加できます"
+                        options=additional_options,
+                        help="D区分, E区分, F区分, G区分, H区分, Z区分を追加できます"
                     )
                 with col2:
-                    if new_category_name and st.button("区分を追加"):
+                    st.write("")  # ラベルと高さを合わせるための空白
+                    if st.button("区分を追加する", type="primary", disabled=not new_category_display):
+                        # 表示名から区分名を抽出（「D区分」→「D」）
+                        new_category_name = new_category_display.replace('区分', '')
+                        
                         # 既存の区分名と重複チェック
                         existing_names = [cat['name'] for cat in st.session_state.abc_categories]
                         if new_category_name not in existing_names:
@@ -197,39 +206,97 @@ def show():
                             st.session_state.abc_categories.append(new_category)
                             st.rerun()
                         else:
-                            st.warning(f"区分 '{new_category_name}' は既に存在します")
+                            st.warning(f"区分 '{new_category_display}' は既に存在します")
                 
                 # 区分設定の編集
-                st.markdown("### 構成比範囲設定")
+                st.markdown("### 各区分の構成比率の範囲設定")
+                
+                # 凡例表示を削除し、CSS スタイリングのみ保持
+                st.markdown("""
+                <style>
+                .editable-field {
+                    background-color: #ffffff;
+                    border: 2px solid #4CAF50;
+                    border-radius: 4px;
+                    padding: 2px;
+                }
+                .auto-field {
+                    background-color: #f5f5f5;
+                    border: 1px solid #cccccc;
+                    border-radius: 4px;
+                    padding: 2px;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
                 edited_categories = []
                 
                 for i, category in enumerate(st.session_state.abc_categories):
                     col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
                     
                     with col1:
-                        st.text(category['name'])
+                        # 区分名を入力欄と同じ高さにするため、number_inputと同じスタイルで配置
+                        st.markdown(f"**{category['name']}区分**")
+                        # 縦方向の位置調整のため少し空白を追加
+                        st.write("")
                     
                     with col2:
-                        start_ratio = st.number_input(
-                            f"開始%",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=category['start_ratio'] * 100,
-                            step=1.0,
-                            key=f"start_{i}",
-                            help="この区分の開始構成比（%）"
-                        ) / 100.0
+                        # 開始構成比率は自動設定（編集不可）
+                        if i == 0:
+                            # A区分の開始は常に0
+                            start_ratio = 0.0
+                            st.number_input(
+                                f"開始%",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=0.0,
+                                step=1.0,
+                                key=f"start_{i}",
+                                help="A区分の開始は常に0%（自動設定）",
+                                disabled=True
+                            )
+                        else:
+                            # 前の区分の終了値を自動設定
+                            start_ratio = edited_categories[i-1]['end_ratio']
+                            st.number_input(
+                                f"開始%",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=start_ratio * 100,
+                                step=1.0,
+                                key=f"start_{i}",
+                                help="前の区分の終了値が自動設定されます",
+                                disabled=True
+                            )
                     
                     with col3:
-                        end_ratio = st.number_input(
-                            f"終了%",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=category['end_ratio'] * 100,
-                            step=1.0,
-                            key=f"end_{i}",
-                            help="この区分の終了構成比（%）"
-                        ) / 100.0
+                        # 最終区分以外は終了構成比率を入力可能
+                        is_last_category = (i == len(st.session_state.abc_categories) - 1)
+                        
+                        if is_last_category:
+                            # 最終区分の終了は常に100
+                            end_ratio = 1.0
+                            st.number_input(
+                                f"終了%",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=100.0,
+                                step=1.0,
+                                key=f"end_{i}",
+                                help="最終区分の終了は常に100%（自動設定）",
+                                disabled=True
+                            )
+                        else:
+                            # 編集可能（白背景）
+                            end_ratio = st.number_input(
+                                f"終了%",
+                                min_value=(start_ratio * 100) + 1.0,  # 開始値より大きい値
+                                max_value=100.0,
+                                value=category['end_ratio'] * 100,
+                                step=1.0,
+                                key=f"end_{i}",
+                                help="この区分の終了構成比率（%）- 編集可能"
+                            ) / 100.0
                     
                     with col4:
                         if len(st.session_state.abc_categories) > 1:  # 最低1つは残す
@@ -258,7 +325,7 @@ def show():
                     st.rerun()
         
         # マッピング確認・保存
-        if st.button("マッピング設定を適用", type="primary"):
+        if st.button("マッピング設定を適用する", type="primary"):
             # 必須項目チェック（ABC区分は除く - 自動生成するため）
             required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
             missing_fields = [field for field in required_fields if not mapping[field]]
@@ -318,7 +385,7 @@ def show():
                                 status.update(label="❌ ABC区分計算エラー", state="error")
                                 return
                     else:
-                        st.info("📋 CSVファイルのABC区分カラムを使用します")
+                        st.info("📋 CSVファイルのABC区分を使用します")
                     
                     # 基本検証
                     if validate_mapped_data(mapped_df):
@@ -337,15 +404,56 @@ def show():
         if st.session_state.mapping_completed and st.session_state.data is not None:
             # マッピング結果表示
             st.subheader("4. マッピング結果")
-            mapping_df = pd.DataFrame([
-                {"システム項目": k, "CSVカラム": v, "データ型": str(st.session_state.data[k].dtype) if v else "未設定"}
-                for k, v in st.session_state.current_mapping.items() if v
-            ])
+            
+            # 日本語名のマッピング
+            mapping_data = []
+            for k, v in st.session_state.current_mapping.items():
+                if v:  # 空でない場合のみ
+                    japanese_name = COLUMN_MAPPING.get(k, k)
+                    system_item_display = f"{japanese_name} ({k})"
+                    data_type = str(st.session_state.data[k].dtype) if k in st.session_state.data.columns else "未設定"
+                    mapping_data.append({
+                        "システム項目": system_item_display,
+                        "CSVカラム": v,
+                        "データ型": data_type
+                    })
+            
+            mapping_df = pd.DataFrame(mapping_data)
+            # インデックスを1始まりに変更
+            mapping_df.index = range(1, len(mapping_df) + 1)
             st.dataframe(mapping_df, use_container_width=True)
             
             # 変換後データプレビュー
-            st.subheader("5. 変換後データプレビュー")
-            st.dataframe(st.session_state.data.head(), use_container_width=True)
+            st.subheader("5. 変換後データプレビュー（上位5件表示）")
+            
+            # カラム名を日本語に変更したデータフレームを作成
+            preview_data = st.session_state.data.head(5).copy()
+            
+            # カラム名を日本語に変更
+            japanese_column_mapping = {}
+            for col in preview_data.columns:
+                if col in COLUMN_MAPPING:
+                    japanese_column_mapping[col] = COLUMN_MAPPING[col]
+                else:
+                    japanese_column_mapping[col] = col
+            
+            preview_data = preview_data.rename(columns=japanese_column_mapping)
+            
+            # ABC区分を商品コードの直後に配置
+            if 'ABC区分' in preview_data.columns and '商品コード' in preview_data.columns:
+                # カラムの順序を調整
+                cols = list(preview_data.columns)
+                # ABC区分を削除
+                cols.remove('ABC区分')
+                # 商品コードの位置を取得
+                product_code_idx = cols.index('商品コード')
+                # 商品コードの直後にABC区分を挿入
+                cols.insert(product_code_idx + 1, 'ABC区分')
+                preview_data = preview_data[cols]
+            
+            # インデックスを1始まりに変更
+            preview_data.index = range(1, len(preview_data) + 1)
+            st.dataframe(preview_data, use_container_width=True)
             
             # ABC区分の集計結果表示
             if 'Class_abc' in st.session_state.data.columns:
@@ -363,9 +471,9 @@ def show():
                     
                     with col2:
                         if 'ratios' in abc_summary:
-                            st.markdown("**実績値構成比**")
+                            st.markdown("**実績値構成比率**")
                             ratios_df = pd.DataFrame(list(abc_summary['ratios'].items()), 
-                                                    columns=['ABC区分', '構成比(%)'])
+                                                    columns=['ABC区分', '構成比率(%)'])
                             st.dataframe(ratios_df, use_container_width=True)
     
     # 既にデータが読み込まれている場合の情報表示
@@ -588,7 +696,7 @@ def calculate_japanese_quality_score(df):
             'コード', 'データ', '実績', '予測', '計画', '分類', '年月',
             '商品', '売上', '需要', '在庫', '価格', '金額', '数量',
             '生産工場', '生産ライン', 'ABC区分', '出庫実績', 'ハイブリッド',
-            '構成比', '異常値', '須賀川'  # このファイル特有の内容
+            '構成比率', '異常値', '須賀川'  # このファイル特有の内容
         ]
         
         matched_patterns = 0

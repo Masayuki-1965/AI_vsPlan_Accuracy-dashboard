@@ -465,33 +465,63 @@ def show():
                 abc_summary = get_abc_classification_summary(st.session_state.data, 'Class_abc', 'Actual')
                 
                 if abc_summary:
-                    col1, col2 = st.columns(2)
+                    # 2カラムレイアウト：左側に統合表、右側に読み込み済みデータ情報
+                    col_left, col_right = st.columns([2, 1])
                     
-                    with col1:
-                        st.markdown("**件数分布**")
-                        counts_df = pd.DataFrame(list(abc_summary['counts'].items()), 
-                                                columns=['ABC区分', '件数'])
-                        st.dataframe(counts_df, use_container_width=True)
+                    with col_left:
+                        # 統合表の作成
+                        abc_result_data = []
+                        total_count = 0
+                        total_ratio = 0
+                        
+                        # 区分順に並べるため、A,B,C,D,...の順でソート
+                        sorted_categories = sorted(abc_summary['counts'].keys())
+                        
+                        for category in sorted_categories:
+                            count = abc_summary['counts'].get(category, 0)
+                            ratio = abc_summary['ratios'].get(category, 0)
+                            abc_result_data.append({
+                                'ABC区分': f"{category}区分",
+                                '件数': count,
+                                '構成比率（％）': f"{ratio:.2f}"
+                            })
+                            total_count += count
+                            total_ratio += ratio
+                        
+                        # 合計行を追加
+                        abc_result_data.append({
+                            'ABC区分': '合計',
+                            '件数': total_count,
+                            '構成比率（％）': f"{total_ratio:.2f}"
+                        })
+                        
+                        # データフレーム作成（インデックスなし）
+                        result_df = pd.DataFrame(abc_result_data)
+                        st.dataframe(result_df, use_container_width=True, hide_index=True)
                     
-                    with col2:
-                        if 'ratios' in abc_summary:
-                            st.markdown("**実績値構成比率**")
-                            ratios_df = pd.DataFrame(list(abc_summary['ratios'].items()), 
-                                                    columns=['ABC区分', '構成比率(%)'])
-                            st.dataframe(ratios_df, use_container_width=True)
+                    with col_right:
+                        # 読み込み済みデータ情報を右側に配置
+                        if st.session_state.data is not None:
+                            df = st.session_state.data
+                            
+                            # 期間の年月フォーマット変換
+                            def format_date(date_val):
+                                date_str = str(date_val)
+                                if len(date_str) == 6:  # YYYYMM形式
+                                    year = date_str[:4]
+                                    month = date_str[4:6]
+                                    return f"{year}年{month}月"
+                                return date_str
+                            
+                            min_date = format_date(df['Date'].min())
+                            max_date = format_date(df['Date'].max())
+                            
+                            st.markdown("**📊 読み込み済みデータ情報**")
+                            st.markdown(f"**期間範囲：** {min_date} - {max_date}")
+                            st.markdown(f"**データ件数：** {len(df):,} 件")
+                            st.markdown(f"**商品コード数：** {df['P_code'].nunique():,} 件")
     
-    # 既にデータが読み込まれている場合の情報表示
-    if st.session_state.data is not None:
-        st.subheader("💾 読み込み済みデータ情報")
-        df = st.session_state.data
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("データ件数", len(df))
-        with col2:
-            st.metric("期間範囲", f"{df['Date'].min()} - {df['Date'].max()}")
-        with col3:
-            st.metric("商品コード数", df['P_code'].nunique())
+    # 既存の読み込み済みデータ情報表示を削除（統合したため）
 
 def get_selectbox_index(options, value):
     """selectboxのindex値を取得"""

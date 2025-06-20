@@ -219,7 +219,7 @@ def validate_abc_categories(categories):
 
 def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actual'):
     """
-    ABC区分の集計結果を取得
+    ABC区分の集計結果を取得（商品コード単位で集計）
     
     Args:
         df: データフレーム
@@ -240,16 +240,37 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
     # ABC区分別の集計
     summary = {}
     
-    # 区分別の件数と実績値合計
-    abc_counts = df_work[abc_column].value_counts().sort_index()
-    summary['counts'] = abc_counts.to_dict()
-    
-    if base_column in df_work.columns:
-        abc_totals = df_work.groupby(abc_column)[base_column].sum().sort_index()
-        total_actual = df_work[base_column].sum()
+    # 商品コード単位での集計（商品コード数と一致させるため）
+    if 'P_code' in df_work.columns:
+        # 商品コード別の実績値合計とABC区分を取得（重複を排除）
+        product_data = df_work.groupby('P_code').agg({
+            base_column: 'sum',
+            abc_column: 'first'  # 各商品コードのABC区分（同一商品は同じ区分なので最初の値を取得）
+        }).reset_index()
         
-        summary['totals'] = abc_totals.to_dict()
-        summary['ratios'] = (abc_totals / total_actual * 100).round(2).to_dict() if total_actual > 0 else {}
-        summary['total_actual'] = total_actual
+        # 区分別の商品コード数
+        abc_counts = product_data[abc_column].value_counts().sort_index()
+        summary['counts'] = abc_counts.to_dict()
+        
+        if base_column in df_work.columns:
+            # 区分別の実績値合計
+            abc_totals = product_data.groupby(abc_column)[base_column].sum().sort_index()
+            total_actual = product_data[base_column].sum()
+            
+            summary['totals'] = abc_totals.to_dict()
+            summary['ratios'] = (abc_totals / total_actual * 100).round(2).to_dict() if total_actual > 0 else {}
+            summary['total_actual'] = total_actual
+    else:
+        # 商品コードがない場合は従来通りの行単位での集計
+        abc_counts = df_work[abc_column].value_counts().sort_index()
+        summary['counts'] = abc_counts.to_dict()
+        
+        if base_column in df_work.columns:
+            abc_totals = df_work.groupby(abc_column)[base_column].sum().sort_index()
+            total_actual = df_work[base_column].sum()
+            
+            summary['totals'] = abc_totals.to_dict()
+            summary['ratios'] = (abc_totals / total_actual * 100).round(2).to_dict() if total_actual > 0 else {}
+            summary['total_actual'] = total_actual
     
     return summary 

@@ -198,28 +198,108 @@ def create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categori
     
     # 加重平均誤差率行の追加
     avg_row_data = []
-    ai_weighted_avg = calculate_weighted_average_error_rate(ai_errors, error_col, 'Actual') * 100
-    plan_weighted_avg = calculate_weighted_average_error_rate(plan_errors, error_col, 'Actual') * 100
-    avg_row_data.extend([f"{ai_weighted_avg:.1f}%", f"{plan_weighted_avg:.1f}%"])
     
+    # 全体の加重平均誤差率を計算（正負分けて計算）
+    if error_type == 'positive':
+        # 正の誤差率のみでフィルタリングしてから計算
+        ai_positive = ai_errors[ai_errors['error_rate'] > 0]
+        plan_positive = plan_errors[plan_errors['error_rate'] > 0]
+        
+        if len(ai_positive) > 0:
+            ai_weighted_avg = calculate_weighted_average_error_rate(ai_positive, 'error_rate', 'Actual') * 100
+            ai_formatted = f"+{ai_weighted_avg:.1f}%"
+        else:
+            ai_formatted = "+0.0%"
+            
+        if len(plan_positive) > 0:
+            plan_weighted_avg = calculate_weighted_average_error_rate(plan_positive, 'error_rate', 'Actual') * 100
+            plan_formatted = f"+{plan_weighted_avg:.1f}%"
+        else:
+            plan_formatted = "+0.0%"
+            
+        avg_row_data.extend([ai_formatted, plan_formatted])
+        
+    elif error_type == 'negative':
+        # 負の誤差率のみでフィルタリングしてから計算
+        ai_negative = ai_errors[ai_errors['error_rate'] < 0]
+        plan_negative = plan_errors[plan_errors['error_rate'] < 0]
+        
+        if len(ai_negative) > 0:
+            ai_weighted_avg = calculate_weighted_average_error_rate(ai_negative, 'error_rate', 'Actual') * 100
+            ai_formatted = f"{ai_weighted_avg:.1f}%"
+        else:
+            ai_formatted = "0.0%"
+            
+        if len(plan_negative) > 0:
+            plan_weighted_avg = calculate_weighted_average_error_rate(plan_negative, 'error_rate', 'Actual') * 100
+            plan_formatted = f"{plan_weighted_avg:.1f}%"
+        else:
+            plan_formatted = "0.0%"
+            
+        avg_row_data.extend([ai_formatted, plan_formatted])
+        
+    else:  # absolute
+        # 絶対誤差率は従来通り
+        ai_weighted_avg = calculate_weighted_average_error_rate(ai_errors, error_col, 'Actual') * 100
+        plan_weighted_avg = calculate_weighted_average_error_rate(plan_errors, error_col, 'Actual') * 100
+        avg_row_data.extend([f"{ai_weighted_avg:.1f}%", f"{plan_weighted_avg:.1f}%"])
+    
+    # ABC区分別の加重平均誤差率を計算
     for abc in abc_categories:
         if 'Class_abc' in ai_errors.columns:
             ai_abc_data = ai_errors[ai_errors['Class_abc'] == abc]
             plan_abc_data = plan_errors[plan_errors['Class_abc'] == abc]
             
-            if len(ai_abc_data) > 0:
-                ai_abc_weighted_avg = calculate_weighted_average_error_rate(ai_abc_data, error_col, 'Actual') * 100
-                avg_row_data.append(f"{ai_abc_weighted_avg:.1f}%")
-            else:
-                avg_row_data.append("0.0%")
+            # 正の誤差率の場合は正の値のみでフィルタリング
+            if error_type == 'positive':
+                ai_abc_positive = ai_abc_data[ai_abc_data['error_rate'] > 0]
+                plan_abc_positive = plan_abc_data[plan_abc_data['error_rate'] > 0]
                 
-            if len(plan_abc_data) > 0:
-                plan_abc_weighted_avg = calculate_weighted_average_error_rate(plan_abc_data, error_col, 'Actual') * 100
-                avg_row_data.append(f"{plan_abc_weighted_avg:.1f}%")
-            else:
-                avg_row_data.append("0.0%")
+                if len(ai_abc_positive) > 0:
+                    ai_abc_weighted_avg = calculate_weighted_average_error_rate(ai_abc_positive, 'error_rate', 'Actual') * 100
+                    avg_row_data.append(f"+{ai_abc_weighted_avg:.1f}%")
+                else:
+                    avg_row_data.append("+0.0%")
+                    
+                if len(plan_abc_positive) > 0:
+                    plan_abc_weighted_avg = calculate_weighted_average_error_rate(plan_abc_positive, 'error_rate', 'Actual') * 100
+                    avg_row_data.append(f"+{plan_abc_weighted_avg:.1f}%")
+                else:
+                    avg_row_data.append("+0.0%")
+                    
+            elif error_type == 'negative':
+                ai_abc_negative = ai_abc_data[ai_abc_data['error_rate'] < 0]
+                plan_abc_negative = plan_abc_data[plan_abc_data['error_rate'] < 0]
+                
+                if len(ai_abc_negative) > 0:
+                    ai_abc_weighted_avg = calculate_weighted_average_error_rate(ai_abc_negative, 'error_rate', 'Actual') * 100
+                    avg_row_data.append(f"{ai_abc_weighted_avg:.1f}%")
+                else:
+                    avg_row_data.append("0.0%")
+                    
+                if len(plan_abc_negative) > 0:
+                    plan_abc_weighted_avg = calculate_weighted_average_error_rate(plan_abc_negative, 'error_rate', 'Actual') * 100
+                    avg_row_data.append(f"{plan_abc_weighted_avg:.1f}%")
+                else:
+                    avg_row_data.append("0.0%")
+                    
+            else:  # absolute
+                if len(ai_abc_data) > 0:
+                    ai_abc_weighted_avg = calculate_weighted_average_error_rate(ai_abc_data, error_col, 'Actual') * 100
+                    avg_row_data.append(f"{ai_abc_weighted_avg:.1f}%")
+                else:
+                    avg_row_data.append("0.0%")
+                    
+                if len(plan_abc_data) > 0:
+                    plan_abc_weighted_avg = calculate_weighted_average_error_rate(plan_abc_data, error_col, 'Actual') * 100
+                    avg_row_data.append(f"{plan_abc_weighted_avg:.1f}%")
+                else:
+                    avg_row_data.append("0.0%")
         else:
-            avg_row_data.extend(["0.0%", "0.0%"])
+            if error_type == 'positive':
+                avg_row_data.extend(["+0.0%", "+0.0%"])
+            else:
+                avg_row_data.extend(["0.0%", "0.0%"])
     
     matrix_data.append(avg_row_data)
     

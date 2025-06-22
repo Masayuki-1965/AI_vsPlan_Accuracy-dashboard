@@ -227,6 +227,9 @@ def create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categori
     # DataFrame作成
     matrix_df = pd.DataFrame(matrix_data, index=index_labels, columns=multi_index)
     
+    # インデックス名を設定
+    matrix_df.index.name = '誤差率帯'
+    
     return matrix_df
 
 def get_plan_name(plan_col):
@@ -243,44 +246,109 @@ def get_error_rate_definition(error_type):
     return definitions.get(error_type, '|計画値 - 実績値| ÷ 実績値')
 
 def get_error_rate_bands_with_signs(error_type):
-    """誤差率タイプに応じた誤差率帯ラベルを取得"""
-    from config.settings import ERROR_RATE_CATEGORIES
-    
+    """誤差率タイプに応じた符号付き誤差率帯ラベル生成"""
     bands = []
-    for category in ERROR_RATE_CATEGORIES:
-        if 'special' in category:
-            bands.append(category['label'])
-        else:
-            label = category['label']
+    for cat in ERROR_RATE_CATEGORIES:
+        label = cat['label']
+        
+        # 新しい表記形式に変更（「～」を使用）
+        if error_type in ['positive', 'negative']:
             if error_type == 'positive':
                 # 正の誤差率の場合は「+」を付ける
-                label = '+' + label
-            elif error_type == 'negative':
+                if label == '0 - 10%':
+                    label = '+0％ ～ +10％'
+                elif label == '10 - 20%':
+                    label = '+10％ ～ +20％'
+                elif label == '20 - 30%':
+                    label = '+20％ ～ +30％'
+                elif label == '30 - 50%':
+                    label = '+30％ ～ +50％'
+                elif label == '50 - 100%':
+                    label = '+50％ ～ +100％'
+                elif label == '100%以上':
+                    label = '+100％以上'
+                elif label == '計算不能（実績ゼロ）':
+                    label = '計算不能（実績ゼロ）'
+            else:  # negative
                 # 負の誤差率の場合は「-」を付ける
-                label = '-' + label
-            # 絶対誤差率の場合は符号なし
-            bands.append(label)
+                if label == '0 - 10%':
+                    label = '-0％ ～ -10％'
+                elif label == '10 - 20%':
+                    label = '-10％ ～ -20％'
+                elif label == '20 - 30%':
+                    label = '-20％ ～ -30％'
+                elif label == '30 - 50%':
+                    label = '-30％ ～ -50％'
+                elif label == '50 - 100%':
+                    label = '-50％ ～ -100％'
+                elif label == '100%以上':
+                    label = '-100％以上'
+                elif label == '計算不能（実績ゼロ）':
+                    label = '計算不能（実績ゼロ）'
+        else:
+            # 絶対誤差率の場合は符号なしで「～」表記
+            if label == '0 - 10%':
+                label = '0％ ～ 10％'
+            elif label == '10 - 20%':
+                label = '10％ ～ 20％'
+            elif label == '20 - 30%':
+                label = '20％ ～ 30％'
+            elif label == '30 - 50%':
+                label = '30％ ～ 50％'
+            elif label == '50 - 100%':
+                label = '50％ ～ 100％'
+            elif label == '100%以上':
+                label = '100％以上'
+            elif label == '計算不能（実績ゼロ）':
+                label = '計算不能（実績ゼロ）'
+        
+        bands.append(label)
     
     return bands
 
 def display_styled_matrix(matrix_df, abc_categories):
-    """シンプルな2段ヘッダー対応マトリクス表示"""
-    st.subheader("📊 誤差率評価マトリクス")
-    
-    # 重要な注釈を表示
-    st.markdown("""
-    **※マトリクス内はすべて商品コードの件数です**  
-    **誤差率定義**: |計画値 - 実績値| ÷ 実績値（分母：実績値）
-    """)
-    
-    # 数値フォーマット適用
+    """2段ヘッダー維持＋誤差率帯列幅制御版マトリクス表示"""
+    # データ型の統一処理（Arrow互換性確保）
     matrix_formatted = matrix_df.copy()
-    for idx in matrix_formatted.index:
-        if idx != '加重平均誤差率（%）':
-            for col in matrix_formatted.columns:
-                val = matrix_formatted.loc[idx, col]
-                if pd.notna(val) and isinstance(val, (int, float)):
-                    matrix_formatted.loc[idx, col] = int(val)
     
-    # シンプルなDataFrame表示
-    st.dataframe(matrix_formatted, use_container_width=True) 
+    # 全てのデータを文字列に統一してArrow互換性を確保
+    for idx in matrix_formatted.index:
+        for col in matrix_formatted.columns:
+            val = matrix_formatted.loc[idx, col]
+            if pd.isna(val):
+                matrix_formatted.loc[idx, col] = ""
+            elif idx == '加重平均誤差率（%）':
+                # 加重平均行はパーセント表記のまま
+                matrix_formatted.loc[idx, col] = str(val)
+            else:
+                # 件数行は整数として表示してから文字列に変換
+                try:
+                    if isinstance(val, (int, float)) and not pd.isna(val):
+                        matrix_formatted.loc[idx, col] = str(int(val))
+                    else:
+                        matrix_formatted.loc[idx, col] = str(val)
+                except:
+                    matrix_formatted.loc[idx, col] = str(val)
+    
+    # MultiIndex構造を維持（平坦化しない）
+    # 2段ヘッダー構造を保持したまま処理
+    
+    # インデックをリセットして誤差率帯を通常の列として扱う
+    matrix_display = matrix_formatted.reset_index()
+    
+    # 列幅設定：誤差率帯列のみを対象とする
+    column_config = {
+        "誤差率帯": st.column_config.TextColumn(
+            "誤差率帯",
+            width="medium",  # 適切な幅に設定
+            help="誤差率の区分範囲"
+        )
+    }
+    
+    # DataFrame表示（2段ヘッダー維持＋誤差率帯列幅制御）
+    st.dataframe(
+        matrix_display,
+        use_container_width=True,
+        column_config=column_config,
+        hide_index=True
+    ) 

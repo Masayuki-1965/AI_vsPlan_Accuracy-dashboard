@@ -1,0 +1,56 @@
+TypeError: keys must be str, int, float, bool or None, not tuple
+Traceback:
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\runtime\scriptrunner\exec_code.py", line 121, in exec_func_with_error_handling
+    result = func()
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 643, in code_to_exec
+    _mpa_v1(self._main_script_path)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\runtime\scriptrunner\script_runner.py", line 164, in _mpa_v1
+    page.run()
+    ~~~~~~~~^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\navigation\page.py", line 297, in run
+    exec(code, module.__dict__)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\app.py", line 89, in <module>
+    pages[selected_page].show()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\pages\matrix.py", line 38, in show
+    display_new_error_rate_matrix(filtered_df, filter_settings)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\pages\matrix.py", line 127, in display_new_error_rate_matrix
+    display_styled_matrix(matrix_df, abc_categories)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\pages\matrix.py", line 368, in display_styled_matrix
+    st.dataframe(
+    ~~~~~~~~~~~~^
+        matrix_display,
+        ^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        hide_index=True  # リセットしたインデックスを非表示
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\runtime\metrics_util.py", line 444, in wrapped_func
+    result = non_optional_func(*args, **kwargs)
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\elements\arrow.py", line 613, in dataframe
+    marshall_column_config(proto, column_config_mapping)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\elements\lib\column_config_utils.py", line 539, in marshall_column_config
+    proto.columns = _convert_column_config_to_json(column_config_mapping)
+                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+File "C:\Users\kanek\AICording\Lectures\Python講座\AI_vs_Plan_Accuracy_ver1\venv\Lib\site-packages\streamlit\elements\lib\column_config_utils.py", line 510, in _convert_column_config_to_json
+    return json.dumps(
+           ~~~~~~~~~~^
+        {
+        ^
+    ...<5 lines>...
+        allow_nan=False,
+        ^^^^^^^^^^^^^^^^
+    )
+    ^
+File "C:\Users\kanek\AppData\Local\Programs\Python\Python313\Lib\json\__init__.py", line 238, in dumps
+    **kw).encode(obj)
+          ~~~~~~^^^^^
+File "C:\Users\kanek\AppData\Local\Programs\Python\Python313\Lib\json\encoder.py", line 200, in encode
+    chunks = self.iterencode(o, _one_shot=True)
+File "C:\Users\kanek\AppData\Local\Programs\Python\Python313\Lib\json\encoder.py", line 261, in iterencode

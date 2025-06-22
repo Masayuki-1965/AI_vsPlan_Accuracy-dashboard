@@ -5,13 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from utils.error_calculator import calculate_error_rates, calculate_weighted_average_error_rate
-
-# カラーパレット（統一デザイン）
-COLOR_PALETTE = {
-    'AI_pred': '#FF6B6B',   # レッド系
-    'Plan_01': '#4ECDC4',   # ティール系
-    'Plan_02': '#45B7D1'    # ブルー系
-}
+from config.constants import UNIFIED_COLOR_PALETTE, PREDICTION_TYPE_NAMES
 
 def show():
     """散布図分析ページを表示"""
@@ -110,12 +104,7 @@ def apply_filters(df):
 
 def get_prediction_name(pred_type):
     """予測タイプの表示名を取得"""
-    name_mapping = {
-        'AI_pred': 'AI予測',
-        'Plan_01': '計画01',
-        'Plan_02': '計画02'
-    }
-    return name_mapping.get(pred_type, pred_type)
+    return PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
 
 def create_error_rate_scatter(df, selected_predictions):
     """誤差率散布図を作成"""
@@ -141,15 +130,9 @@ def create_error_rate_scatter(df, selected_predictions):
         # 色分け用の列を作成（ABC区分があれば使用）
         if 'Class_abc' in df.columns:
             color_col = 'Class_abc'
-            color_discrete_map = {
-                'A': '#FF9999',
-                'B': '#66B2FF', 
-                'C': '#99FF99',
-                'D': '#FFCC99',
-                'E': '#FF99CC',
-                'F': '#99CCFF',
-                'G': '#CCFF99'
-            }
+            # ABC区分カラーを統一パレットから取得
+            color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
+                                if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G']}
         else:
             color_col = None
             color_discrete_map = None

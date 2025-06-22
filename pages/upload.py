@@ -10,6 +10,8 @@ from utils.data_processor import (
     get_abc_classification_summary
 )
 from config.settings import ABC_CLASSIFICATION_SETTINGS, COLUMN_MAPPING
+from config.ui_styles import HELP_TEXTS, ABC_EXPLANATION
+from config.constants import DATA_PROCESSING_CONSTANTS, UI_DISPLAY_CONSTANTS
 
 def show():
     """データアップロードページを表示"""
@@ -38,7 +40,7 @@ def show():
     uploaded_file = st.file_uploader(
         "CSVファイルを選択してください",
         type=['csv'],
-        help="分析対象のCSVファイルをアップロードしてください"
+        help=HELP_TEXTS['file_upload_help']
     )
     
     # 新しいファイルがアップロードされた場合
@@ -70,10 +72,10 @@ def show():
         st.info(f"📁 読み込み済みファイル: {st.session_state.uploaded_filename}")
         
         # データプレビュー
-        st.subheader("2. データプレビュー（上位10件表示）")
+        st.subheader(f"2. データプレビュー（上位{DATA_PROCESSING_CONSTANTS['default_preview_rows']}件表示）")
         # インデックスを1始まりに変更
-        preview_df = df.head(10).copy()
-        preview_df.index = range(1, len(preview_df) + 1)
+        preview_df = df.head(DATA_PROCESSING_CONSTANTS['default_preview_rows']).copy()
+        preview_df.index = range(UI_DISPLAY_CONSTANTS['selectbox_start_index'], len(preview_df) + UI_DISPLAY_CONSTANTS['selectbox_start_index'])
         st.dataframe(preview_df, use_container_width=True)
         
         # データマッピング
@@ -90,31 +92,31 @@ def show():
                 "商品コード",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('P_code', '')),
-                help="商品を識別するコード（必須）"
+                help=HELP_TEXTS['product_code_help']
             )
             mapping['Date'] = st.selectbox(
                 "年月",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Date', '')),
-                help="YYYYMM形式の年月データ（必須）"
+                help=HELP_TEXTS['date_help']
             )
             mapping['Actual'] = st.selectbox(
                 "実績値",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Actual', '')),
-                help="実際の売上・需要実績（必須）"
+                help=HELP_TEXTS['actual_help']
             )
             mapping['AI_pred'] = st.selectbox(
-                "AI予測値",
+                "AI予測値", 
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('AI_pred', '')),
-                help="AIによる予測値（必須）"
+                help=HELP_TEXTS['ai_pred_help']
             )
             mapping['Plan_01'] = st.selectbox(
                 "計画値01",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_01', '')),
-                help="基準となる計画値（必須）"
+                help=HELP_TEXTS['plan_01_help']
             )
             
             # ABC区分を必須項目として追加
@@ -123,13 +125,13 @@ def show():
                 "ABC区分",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
-                help="CSVファイルにABC区分がある場合は選択してください"
+                help=HELP_TEXTS['abc_class_help']
             )
             
             # ABC区分の自動生成設定
             abc_has_column = bool(mapping['Class_abc'])
             if not abc_has_column:
-                st.info("💡 ABC区分が選択されていないため、実績値に基づいて自動生成されます")
+                st.info(ABC_EXPLANATION['auto_no_column'])
                 st.session_state.abc_auto_generate = True
             else:
                 st.session_state.abc_auto_generate = st.checkbox(
@@ -144,19 +146,19 @@ def show():
                 "分類01",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_01', '')),
-                help="商品分類・カテゴリ1（任意）"
+                help=HELP_TEXTS['class_01_help']
             )
             mapping['Class_02'] = st.selectbox(
                 "分類02",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_02', '')),
-                help="商品分類・カテゴリ2（任意）"
+                help=HELP_TEXTS['class_02_help']
             )
             mapping['Plan_02'] = st.selectbox(
                 "計画値02",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_02', '')),
-                help="比較用の計画値（任意）"
+                help=HELP_TEXTS['plan_02_help']
             )
         
         # 現在のマッピング状態を更新
@@ -166,12 +168,12 @@ def show():
         with st.expander("🔧 ABC区分自動生成設定", expanded=st.session_state.abc_auto_generate):
                 # 現在の状態表示
                 if st.session_state.abc_auto_generate:
-                    st.success("🟢 **自動生成モード**: 実績値に基づいてABC区分を自動計算します")
+                    st.success(ABC_EXPLANATION['auto_mode'])
                 else:
-                    st.info("🟡 **手動指定モード**: CSVファイルのABC区分を使用します")
+                    st.info(ABC_EXPLANATION['manual_mode'])
                 
                 st.markdown("### 自動生成時の区分追加")
-                st.markdown("実績値の多い順にソートし、累積構成比率をもとに以下の区分を割り当てます：")
+                st.markdown(ABC_EXPLANATION['category_description'])
                 
                 # 現在の区分設定を表示・編集
                 categories_df = pd.DataFrame(st.session_state.abc_categories)
@@ -184,7 +186,7 @@ def show():
                     new_category_display = st.selectbox(
                         "追加する区分",
                         options=additional_options,
-                        help="D区分, E区分, F区分, G区分, H区分, Z区分を追加できます"
+                        help=HELP_TEXTS['abc_additional_help']
                     )
                 with col2:
                     # プルダウンのラベル高さに合わせるため調整

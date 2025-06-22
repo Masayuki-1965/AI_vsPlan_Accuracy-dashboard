@@ -9,6 +9,8 @@ from utils.error_calculator import (
     categorize_error_rates
 )
 from config.settings import COLOR_PALETTE, ERROR_RATE_CATEGORIES, MATRIX_DISPLAY_SETTINGS
+from config.ui_styles import HELP_TEXTS, MATRIX_EXPLANATION, ERROR_RATE_DEFINITIONS
+from config.constants import PREDICTION_TYPE_NAMES
 
 def show():
     """誤差率評価マトリクスページを表示"""
@@ -53,7 +55,7 @@ def create_filter_ui(df):
         selected_error_type = st.selectbox(
             "誤差率タイプ",
             list(error_types.keys()),
-            help="絶対: |計画-実績|÷実績, 正: 計画>実績(滞留), 負: 計画<実績(欠品)"
+            help=HELP_TEXTS['error_type_help']
         )
         filter_settings['error_type'] = error_types[selected_error_type]
         
@@ -112,8 +114,8 @@ def display_new_error_rate_matrix(df, filter_settings):
     # 説明文追加（誤差率タイプに応じて動的変更）
     error_definition = get_error_rate_definition(error_type)
     st.markdown(f"""
-    **※マトリクス内はすべて商品コードの件数です**  
-    **誤差率定義**: {error_definition}（分母：実績値）
+    {MATRIX_EXPLANATION['matrix_note']}  
+    {MATRIX_EXPLANATION['error_definition_prefix']}  {error_definition} {MATRIX_EXPLANATION['error_definition_suffix']}
     """)
     
     # AI予測と計画値の誤差率計算
@@ -234,16 +236,12 @@ def create_comprehensive_matrix(ai_errors, plan_errors, error_type, abc_categori
 
 def get_plan_name(plan_col):
     """計画カラム名を表示用に変換"""
-    return '計画01' if plan_col == 'Plan_01' else '計画02'
+    from config.constants import PLAN_TYPE_NAMES
+    return PLAN_TYPE_NAMES.get(plan_col, plan_col)
 
 def get_error_rate_definition(error_type):
     """誤差率タイプに応じた定義文を取得"""
-    definitions = {
-        'absolute': '|計画値 - 実績値| ÷ 実績値',
-        'positive': '(計画値 - 実績値) ÷ 実績値（計画 > 実績時のみ）',
-        'negative': '(計画値 - 実績値) ÷ 実績値（計画 < 実績時のみ）'
-    }
-    return definitions.get(error_type, '|計画値 - 実績値| ÷ 実績値')
+    return ERROR_RATE_DEFINITIONS.get(error_type, ERROR_RATE_DEFINITIONS['absolute'])
 
 def get_error_rate_bands_with_signs(error_type):
     """誤差率タイプに応じた符号付き誤差率帯ラベル生成"""

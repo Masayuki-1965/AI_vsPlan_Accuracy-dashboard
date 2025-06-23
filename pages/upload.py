@@ -14,8 +14,8 @@ from config.ui_styles import HELP_TEXTS, ABC_EXPLANATION
 from config.constants import DATA_PROCESSING_CONSTANTS, UI_DISPLAY_CONSTANTS
 
 def show():
-    """データアップロードページを表示"""
-    st.header("📤 データアップロード")
+    """データセット作成ページを表示"""
+    st.header("🛠️ データセット作成")
     
     # セッション状態の初期化
     if 'original_data' not in st.session_state:
@@ -34,6 +34,8 @@ def show():
         st.session_state.abc_categories = ABC_CLASSIFICATION_SETTINGS['default_categories'].copy()
     if 'abc_auto_generate' not in st.session_state:
         st.session_state.abc_auto_generate = True
+    if 'monthly_correction_enabled' not in st.session_state:
+        st.session_state.monthly_correction_enabled = False
     
     # アップロードセクション
     st.subheader("1. CSVファイルアップロード")
@@ -89,31 +91,31 @@ def show():
         with col1:
             st.markdown("**必須項目**")
             mapping['P_code'] = st.selectbox(
-                "商品コード",
+                "商品コード（P_code）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('P_code', '')),
                 help=HELP_TEXTS['product_code_help']
             )
             mapping['Date'] = st.selectbox(
-                "年月",
+                "年月（Date）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Date', '')),
                 help=HELP_TEXTS['date_help']
             )
             mapping['Actual'] = st.selectbox(
-                "実績値",
+                "実績値（Actual）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Actual', '')),
                 help=HELP_TEXTS['actual_help']
             )
             mapping['AI_pred'] = st.selectbox(
-                "AI予測値", 
+                "AI予測値（AI_pred）", 
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('AI_pred', '')),
                 help=HELP_TEXTS['ai_pred_help']
             )
             mapping['Plan_01'] = st.selectbox(
-                "計画値01",
+                "計画値01（Plan_01）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_01', '')),
                 help=HELP_TEXTS['plan_01_help']
@@ -122,7 +124,7 @@ def show():
             # ABC区分を必須項目として追加
             st.markdown("**ABC区分設定（必須）**")
             mapping['Class_abc'] = st.selectbox(
-                "ABC区分",
+                "ABC区分（Class_abc）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
                 help=HELP_TEXTS['abc_class_help']
@@ -143,19 +145,13 @@ def show():
         with col2:
             st.markdown("**任意項目**")
             mapping['Class_01'] = st.selectbox(
-                "分類01",
+                "分類（Class_01）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_01', '')),
                 help=HELP_TEXTS['class_01_help']
             )
-            mapping['Class_02'] = st.selectbox(
-                "分類02",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_02', '')),
-                help=HELP_TEXTS['class_02_help']
-            )
             mapping['Plan_02'] = st.selectbox(
-                "計画値02",
+                "計画値02（Plan_02）",
                 options=[''] + st.session_state.data_columns,
                 index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_02', '')),
                 help=HELP_TEXTS['plan_02_help']
@@ -163,6 +159,18 @@ def show():
         
         # 現在のマッピング状態を更新
         st.session_state.current_mapping = mapping
+        
+        # 月別合計値補正設定の追加
+        st.markdown("---")
+        st.markdown("**月別合計値補正設定**")
+        st.session_state.monthly_correction_enabled = st.checkbox(
+            "月別合計値補正を有効にする",
+            value=st.session_state.monthly_correction_enabled,
+            help="分類ごとの月別合計値を計画値01に合わせて調整します。AI予測および計画値02（存在する場合）が対象となります。"
+        )
+        
+        if st.session_state.monthly_correction_enabled:
+            st.info("💡 補正ロジック：\n- AI予測の月別合計値 ← 計画値01の月別合計値に調整\n- 計画値02の月別合計値 ← 計画値01の月別合計値に調整（存在する場合）")
         
         # ABC区分設定エクスパンダー（常に表示）
         with st.expander("🔧 ABC区分自動生成設定", expanded=st.session_state.abc_auto_generate):
@@ -395,6 +403,20 @@ def show():
                     
                     # 基本検証
                     if validate_mapped_data(mapped_df):
+                        # 月別合計値補正の実行
+                        if st.session_state.monthly_correction_enabled:
+                            with st.status("🔄 月別合計値補正を実行中...", expanded=True) as status:
+                                st.write("📊 分類ごとの月別合計値を分析中...")
+                                
+                                try:
+                                    mapped_df = apply_monthly_correction(mapped_df)
+                                    st.write("✅ 月別合計値補正完了")
+                                    status.update(label="✅ 月別合計値補正完了", state="complete")
+                                except Exception as e:
+                                    st.error(f"❌ 月別合計値補正エラー: {str(e)}")
+                                    status.update(label="❌ 月別合計値補正エラー", state="error")
+                                    return
+                        
                         st.session_state.data = mapped_df
                         st.session_state.mapping = mapping
                         st.session_state.mapping_completed = True
@@ -522,6 +544,16 @@ def show():
                             st.markdown(f"**期間範囲：** {min_date} - {max_date}")
                             st.markdown(f"**データ件数：** {len(df):,} 件")
                             st.markdown(f"**商品コード数：** {df['P_code'].nunique():,} 件")
+            
+            # 年月別集計結果の追加
+            if 'Date' in st.session_state.data.columns:
+                st.subheader("7. 年月別集計結果")
+                monthly_summary_df = create_monthly_summary_table(st.session_state.data)
+                if not monthly_summary_df.empty:
+                    st.dataframe(monthly_summary_df, use_container_width=True, hide_index=True)
+                    st.markdown("**※ 月別合計値補正を実施した場合は、AI予測および計画値の月別合計が一致しているかをご確認ください。**")
+                else:
+                    st.info("年月別集計データがありません")
     
     # 既存の読み込み済みデータ情報表示を削除（統合したため）
 
@@ -763,38 +795,156 @@ def has_japanese_characters(text):
     return bool(japanese_pattern.search(text))
 
 def validate_mapped_data(df):
-    """マッピング後のデータを検証"""
+    """マッピングされたデータの基本検証"""
     try:
-        # 必須カラムの存在確認（ABC区分は自動生成されるため除外）
-        required_cols = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
-        for col in required_cols:
+        # 必須カラムの存在確認
+        required_columns = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
+        for col in required_columns:
             if col not in df.columns:
-                st.error(f"必須カラムが見つかりません: {col}")
+                st.error(f"❌ 必須カラム '{col}' が見つかりません")
                 return False
         
-        # ABC区分の存在確認（必須）
-        if 'Class_abc' not in df.columns:
-            st.error("ABC区分が生成されていません")
+        # データ型の確認
+        numeric_columns = ['Actual', 'AI_pred', 'Plan_01']
+        if 'Plan_02' in df.columns:
+            numeric_columns.append('Plan_02')
+        
+        for col in numeric_columns:
+            if not pd.api.types.is_numeric_dtype(df[col]):
+                try:
+                    # 数値変換を試行
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    null_count = df[col].isnull().sum()
+                    if null_count > 0:
+                        st.warning(f"⚠️ {col}列に{null_count}件の数値変換できないデータがありました（NaNに変換）")
+                except:
+                    st.error(f"❌ {col}列を数値型に変換できません")
+                    return False
+        
+        # 基本統計情報の確認
+        if len(df) == 0:
+            st.error("❌ データが空です")
             return False
         
-        # データ型チェック
-        numeric_cols = ['Actual', 'AI_pred', 'Plan_01']
-        if 'Plan_02' in df.columns:
-            numeric_cols.append('Plan_02')
-            
-        for col in numeric_cols:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            if df[col].isnull().any():
-                st.warning(f"⚠️ {col}に数値以外のデータが含まれています（NaNに変換されました）")
-        
-        # 日付形式チェック（簡易）
-        try:
-            pd.to_datetime(df['Date'].astype(str), format='%Y%m')
-        except:
-            st.warning("⚠️ Date列の形式がYYYYMMでない可能性があります")
-        
+        st.success(f"✅ データ検証完了: {len(df)}件のデータ")
         return True
         
     except Exception as e:
-        st.error(f"データ検証エラー: {str(e)}")
-        return False 
+        st.error(f"❌ データ検証エラー: {str(e)}")
+        return False
+
+def apply_monthly_correction(df):
+    """月別合計値補正を適用"""
+    corrected_df = df.copy()
+    
+    # 分類カラムが存在する場合は分類ごとに補正
+    if 'Class_01' in df.columns and df['Class_01'].notna().any():
+        category_col = 'Class_01'
+        categories = df[category_col].dropna().unique()
+    else:
+        # 分類がない場合は全体で補正
+        category_col = None
+        categories = [None]
+    
+    # Plan_02の存在確認
+    has_plan_02 = 'Plan_02' in df.columns
+    
+    for category in categories:
+        if category_col:
+            category_data = corrected_df[corrected_df[category_col] == category]
+        else:
+            category_data = corrected_df
+        
+        # 月別の集計（Plan_02の存在に応じて動的に設定）
+        agg_dict = {
+            'AI_pred': 'sum',
+            'Plan_01': 'sum'
+        }
+        
+        if has_plan_02:
+            agg_dict['Plan_02'] = 'sum'
+        
+        monthly_data = category_data.groupby('Date').agg(agg_dict).reset_index()
+        
+        for _, month_row in monthly_data.iterrows():
+            date = month_row['Date']
+            plan_01_total = month_row['Plan_01']
+            ai_pred_total = month_row['AI_pred']
+            
+            # 補正係数の計算
+            if ai_pred_total > 0:
+                ai_correction_factor = plan_01_total / ai_pred_total
+            else:
+                ai_correction_factor = 1.0
+            
+            # AI予測の補正
+            if category_col:
+                mask = (corrected_df[category_col] == category) & (corrected_df['Date'] == date)
+            else:
+                mask = (corrected_df['Date'] == date)
+            
+            corrected_df.loc[mask, 'AI_pred'] *= ai_correction_factor
+            
+            # Plan_02が存在する場合のみ補正
+            if has_plan_02:
+                plan_02_total = month_row['Plan_02']
+                if plan_02_total > 0:
+                    plan_02_correction_factor = plan_01_total / plan_02_total
+                    corrected_df.loc[mask, 'Plan_02'] *= plan_02_correction_factor
+    
+    return corrected_df
+
+def create_monthly_summary_table(df):
+    """年月別集計結果テーブルを作成"""
+    try:
+        # 直近12か月のデータに制限
+        if 'Date' not in df.columns:
+            return pd.DataFrame()
+        
+        # 年月データの並び替え
+        unique_dates = sorted(df['Date'].unique(), reverse=True)[:12]
+        
+        # 集計データの作成
+        summary_data = []
+        
+        for date in reversed(unique_dates):  # 古い順に表示
+            date_data = df[df['Date'] == date]
+            
+            # 年月のフォーマット
+            date_str = str(date)
+            if len(date_str) == 6:  # YYYYMM形式
+                formatted_date = f"{date_str[:4]}年{date_str[4:6]}月"
+            else:
+                formatted_date = str(date)
+            
+            row = {
+                '年月': formatted_date,
+                '実績合計': int(date_data['Actual'].sum()),
+                'AI予測': int(date_data['AI_pred'].sum()),
+                '計画01': int(date_data['Plan_01'].sum())
+            }
+            
+            # Plan_02が存在する場合は追加
+            if 'Plan_02' in df.columns:
+                row['計画02'] = int(date_data['Plan_02'].sum())
+            
+            summary_data.append(row)
+        
+        # 合計行を追加
+        total_row = {
+            '年月': '合計',
+            '実績合計': int(df[df['Date'].isin(unique_dates)]['Actual'].sum()),
+            'AI予測': int(df[df['Date'].isin(unique_dates)]['AI_pred'].sum()),
+            '計画01': int(df[df['Date'].isin(unique_dates)]['Plan_01'].sum())
+        }
+        
+        if 'Plan_02' in df.columns:
+            total_row['計画02'] = int(df[df['Date'].isin(unique_dates)]['Plan_02'].sum())
+        
+        summary_data.append(total_row)
+        
+        return pd.DataFrame(summary_data)
+        
+    except Exception as e:
+        st.error(f"年月別集計テーブル作成エラー: {str(e)}")
+        return pd.DataFrame() 

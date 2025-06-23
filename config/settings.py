@@ -15,8 +15,7 @@ COLUMN_MAPPING = {
     'AI_pred': 'AI予測値',
     'Plan_01': '計画値01',
     'Plan_02': '計画値02',
-    'Class_01': '分類01',
-    'Class_02': '分類02',
+    'Class_01': '分類（category_code）',
     'Class_abc': 'ABC区分'
 }
 

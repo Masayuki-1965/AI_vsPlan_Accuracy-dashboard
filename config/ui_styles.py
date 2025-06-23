@@ -54,8 +54,7 @@ HELP_TEXTS = {
     'ai_pred_help': "AIによる予測値（必須）",
     'plan_01_help': "基準となる計画値（必須）",
     'abc_class_help': "CSVファイルにABC区分がある場合は選択してください",
-    'class_01_help': "商品分類・カテゴリ1（任意）",
-    'class_02_help': "商品分類・カテゴリ2（任意）",
+    'class_01_help': "商品分類・カテゴリコード（任意・全角半角日本語入力可）",
     'plan_02_help': "比較用の計画値（任意）",
     'abc_additional_help': "D区分, E区分, F区分, G区分, H区分, Z区分を追加できます"
 }

@@ -56,7 +56,7 @@ def show():
     with col2:
         plot_type = st.selectbox(
             "グラフタイプ",
-            ['誤差率散布図', '予測vs実績散布図']
+            ['予測値 vs 実績値散布図', '誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）']
         )
     
     if not selected_predictions:
@@ -64,7 +64,7 @@ def show():
         return
     
     # 散布図作成・表示
-    if plot_type == '誤差率散布図':
+    if plot_type == '誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）':
         create_error_rate_scatter(filtered_df, selected_predictions)
     else:
         create_prediction_vs_actual_scatter(filtered_df, selected_predictions)
@@ -92,6 +92,31 @@ def get_prediction_name(pred_type):
 
 def create_error_rate_scatter(df, selected_predictions):
     """誤差率散布図を作成"""
+    
+    # 横軸スケール設定UI
+    st.subheader("⚙️ 横軸スケール設定")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        x_min = st.number_input(
+            "横軸最小値 (%)",
+            value=-100,
+            step=10,
+            format="%d"
+        )
+    
+    with col2:
+        x_max = st.number_input(
+            "横軸最大値 (%)",
+            value=200,
+            step=10,
+            format="%d"
+        )
+    
+    # パーセンテージを小数に変換
+    x_min_decimal = x_min / 100
+    x_max_decimal = x_max / 100
+    
     # サブプロット作成
     fig = make_subplots(
         rows=1, 
@@ -99,6 +124,9 @@ def create_error_rate_scatter(df, selected_predictions):
         subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
     )
 
+    # 各サブプロットの縦軸の最小値・最大値を統一するために事前計算
+    all_y_values = []
+    
     for i, pred_col in enumerate(selected_predictions):
         # 誤差率計算
         df_with_errors = calculate_error_rates(df, pred_col, 'Actual')
@@ -108,13 +136,16 @@ def create_error_rate_scatter(df, selected_predictions):
             color_col = 'Class_abc'
             # ABC区分カラーを統一パレットから取得
             color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
-                                if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G']}
+                                if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
         else:
             color_col = None
             color_discrete_map = None
         
         # 実績がゼロの場合を除外（計算不能）
         valid_data = df_with_errors[~df_with_errors['is_actual_zero']].copy()
+        
+        # 縦軸統一用にY値を収集
+        all_y_values.extend(valid_data[pred_col].tolist())
         
         # 散布図作成
         scatter = px.scatter(
@@ -124,32 +155,57 @@ def create_error_rate_scatter(df, selected_predictions):
             color=color_col,
             color_discrete_map=color_discrete_map,
             hover_data=['P_code', 'Actual', pred_col, 'absolute_error_rate'],
-            title=f"{get_prediction_name(pred_col)}の誤差率散布図（分母：実績値）"
+            title=f"{get_prediction_name(pred_col)}"
         )
         
-        # サブプロットに追加
+        # サブプロットに追加（凡例の名前を区分名に変更）
         for trace in scatter.data:
+            if 'Class_abc' in df.columns and trace.name in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']:
+                trace.name = f"{trace.name}区分"
             fig.add_trace(trace, row=1, col=i+1)
         
         # X軸に0の線を追加
         fig.add_vline(x=0, line_dash="dash", line_color="gray", 
                      row=1, col=i+1, annotation_text="完全一致")
     
+    # 縦軸の範囲を統一（全データの最小・最大値に基づく）
+    if all_y_values:
+        y_min = min(all_y_values)
+        y_max = max(all_y_values)
+        y_margin = (y_max - y_min) * 0.05  # 5%のマージン
+        unified_y_range = [y_min - y_margin, y_max + y_margin]
+    else:
+        unified_y_range = None
+    
     # レイアウト調整
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="📊 誤差率散布図（横軸: 誤差率、縦軸: 予測・計画値）※分母：実績値"
+        title_text="誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）",
+        title_font_size=16  # フォントサイズを明示的に設定
     )
     
-    fig.update_xaxes(title_text="誤差率", tickformat='.1%')
-    fig.update_yaxes(title_text="予測・計画値")
+    # 横軸の設定（+/-記号付きの目盛り）
+    fig.update_xaxes(
+        title_text="誤差率", 
+        range=[x_min_decimal, x_max_decimal],
+        tickformat='+.0%',  # +/-記号付きのパーセンテージ表示
+        dtick=0.5  # 50%刻みで目盛り表示
+    )
+    
+    # 縦軸の設定（統一範囲）
+    if unified_y_range:
+        fig.update_yaxes(
+            title_text="予測・計画値",
+            range=unified_y_range
+        )
+    else:
+        fig.update_yaxes(title_text="予測・計画値")
     
     st.plotly_chart(fig, use_container_width=True)
 
 def create_prediction_vs_actual_scatter(df, selected_predictions):
     """予測vs実績散布図を作成"""
-    st.subheader("📊 予測値 vs 実績値散布図")
     
     # サブプロット作成
     fig = make_subplots(
@@ -169,7 +225,8 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
                 'D': '#FFCC99',
                 'E': '#FF99CC',
                 'F': '#99CCFF',
-                'G': '#CCFF99'
+                'G': '#CCFF99',
+                'Z': '#FFB366'
             }
         else:
             color_col = None
@@ -186,8 +243,10 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
             title=f"{get_prediction_name(pred_col)} vs 実績"
         )
         
-        # サブプロットに追加
+        # サブプロットに追加（凡例の名前を区分名に変更）
         for trace in scatter.data:
+            if 'Class_abc' in df.columns and trace.name in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']:
+                trace.name = f"{trace.name}区分"
             fig.add_trace(trace, row=1, col=i+1)
         
         # 完全一致ライン（y=x）を追加
@@ -210,7 +269,8 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="予測値 vs 実績値散布図"
+        title_text="予測値 vs 実績値散布図",
+        title_font_size=16  # フォントサイズを明示的に設定
     )
     
     fig.update_xaxes(title_text="実績値")

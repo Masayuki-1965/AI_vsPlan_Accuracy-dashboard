@@ -88,7 +88,7 @@ def get_data_summary(df):
 
 def calculate_abc_classification(df, categories=None, base_column='Actual'):
     """
-    実績値に基づいてABC区分を自動計算
+    実績値に基づいてABC区分を自動計算（分類単位対応）
     
     Args:
         df: データフレーム
@@ -115,71 +115,119 @@ def calculate_abc_classification(df, categories=None, base_column='Actual'):
     # NaNや負の値を0に変換
     df_work[base_column] = df_work[base_column].fillna(0).clip(lower=0)
     
-    # 商品コード別の実績値合計を計算
-    if 'P_code' in df_work.columns:
-        # 商品コード別に実績値を集計
-        product_totals = df_work.groupby('P_code')[base_column].sum().reset_index()
-        product_totals = product_totals.sort_values(base_column, ascending=False)
-        
-        # 全体の実績値合計
-        total_actual = product_totals[base_column].sum()
-        
-        if total_actual > 0:
-            # 累積構成比を計算
-            product_totals['cumsum'] = product_totals[base_column].cumsum()
-            product_totals['cumsum_ratio'] = product_totals['cumsum'] / total_actual
+    # 分類（category_code）が存在する場合は分類単位で処理
+    if 'category_code' in df_work.columns and df_work['category_code'].notna().any():
+        # 分類別にABC区分を計算
+        for category_code in df_work['category_code'].dropna().unique():
+            category_data = df_work[df_work['category_code'] == category_code]
             
-            # ABC区分を割り当て（累積構成比に基づく）
-            product_totals['Class_abc'] = 'C'  # デフォルト
-            
-            # 区分を構成比の順序で処理（小さい順）
-            sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
-            
-            for category in sorted_categories:
-                # 累積構成比がこの区分の範囲内の商品を対象
-                # 最初の区分（通常A区分）は0から開始
-                if category['start_ratio'] == 0:
-                    mask = product_totals['cumsum_ratio'] <= category['end_ratio']
+            # 商品コード別の実績値合計を計算（分類内で）
+            if 'P_code' in category_data.columns:
+                # 商品コード別に実績値を集計
+                product_totals = category_data.groupby('P_code')[base_column].sum().reset_index()
+                product_totals = product_totals.sort_values(base_column, ascending=False)
+                
+                # 分類内の実績値合計
+                total_actual = product_totals[base_column].sum()
+                
+                if total_actual > 0:
+                    # 累積構成比を計算
+                    product_totals['cumsum'] = product_totals[base_column].cumsum()
+                    product_totals['cumsum_ratio'] = product_totals['cumsum'] / total_actual
+                    
+                    # ABC区分を割り当て（累積構成比に基づく）
+                    product_totals['Class_abc'] = 'C'  # デフォルト
+                    
+                    # 区分を構成比の順序で処理（小さい順）
+                    sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
+                    
+                    for category in sorted_categories:
+                        # 累積構成比がこの区分の範囲内の商品を対象
+                        if category['start_ratio'] == 0:
+                            mask = product_totals['cumsum_ratio'] <= category['end_ratio']
+                        else:
+                            mask = (product_totals['cumsum_ratio'] > category['start_ratio']) & \
+                                   (product_totals['cumsum_ratio'] <= category['end_ratio'])
+                        product_totals.loc[mask, 'Class_abc'] = category['name']
+                    
+                    # 元のデータフレームにマージ（該当分類のみ）
+                    abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
+                    mask = df_work['category_code'] == category_code
+                    df_work.loc[mask, 'Class_abc'] = df_work.loc[mask, 'P_code'].map(abc_mapping)
                 else:
-                    mask = (product_totals['cumsum_ratio'] > category['start_ratio']) & \
-                           (product_totals['cumsum_ratio'] <= category['end_ratio'])
-                product_totals.loc[mask, 'Class_abc'] = category['name']
-            
-            # 元のデータフレームにマージ
-            abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
-            df_work['Class_abc'] = df_work['P_code'].map(abc_mapping)
-        else:
-            # 実績値が全て0の場合はC区分を割り当て
-            df_work['Class_abc'] = 'C'
+                    # 実績値が全て0の場合はC区分を割り当て
+                    mask = df_work['category_code'] == category_code
+                    df_work.loc[mask, 'Class_abc'] = 'C'
+        
+        # 分類が設定されていない行にもC区分を割り当て
+        mask_no_category = df_work['category_code'].isna()
+        df_work.loc[mask_no_category, 'Class_abc'] = 'C'
+        
     else:
-        # 商品コードがない場合は行別に処理
-        df_sorted = df_work.sort_values(base_column, ascending=False)
-        total_actual = df_sorted[base_column].sum()
-        
-        if total_actual > 0:
-            df_sorted['cumsum'] = df_sorted[base_column].cumsum()
-            df_sorted['cumsum_ratio'] = df_sorted['cumsum'] / total_actual
+        # 分類がない場合は従来通りの全体処理
+        # 商品コード別の実績値合計を計算
+        if 'P_code' in df_work.columns:
+            # 商品コード別に実績値を集計
+            product_totals = df_work.groupby('P_code')[base_column].sum().reset_index()
+            product_totals = product_totals.sort_values(base_column, ascending=False)
             
-            # ABC区分を割り当て（累積構成比に基づく）
-            df_sorted['Class_abc'] = 'C'  # デフォルト
+            # 全体の実績値合計
+            total_actual = product_totals[base_column].sum()
             
-            # 区分を構成比の順序で処理（小さい順）
-            sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
-            
-            for category in sorted_categories:
-                # 累積構成比がこの区分の範囲内の行を対象
-                # 最初の区分（通常A区分）は0から開始
-                if category['start_ratio'] == 0:
-                    mask = df_sorted['cumsum_ratio'] <= category['end_ratio']
-                else:
-                    mask = (df_sorted['cumsum_ratio'] > category['start_ratio']) & \
-                           (df_sorted['cumsum_ratio'] <= category['end_ratio'])
-                df_sorted.loc[mask, 'Class_abc'] = category['name']
-            
-            # 元のインデックス順に戻す
-            df_work = df_sorted.sort_index()
+            if total_actual > 0:
+                # 累積構成比を計算
+                product_totals['cumsum'] = product_totals[base_column].cumsum()
+                product_totals['cumsum_ratio'] = product_totals['cumsum'] / total_actual
+                
+                # ABC区分を割り当て（累積構成比に基づく）
+                product_totals['Class_abc'] = 'C'  # デフォルト
+                
+                # 区分を構成比の順序で処理（小さい順）
+                sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
+                
+                for category in sorted_categories:
+                    # 累積構成比がこの区分の範囲内の商品を対象
+                    if category['start_ratio'] == 0:
+                        mask = product_totals['cumsum_ratio'] <= category['end_ratio']
+                    else:
+                        mask = (product_totals['cumsum_ratio'] > category['start_ratio']) & \
+                               (product_totals['cumsum_ratio'] <= category['end_ratio'])
+                    product_totals.loc[mask, 'Class_abc'] = category['name']
+                
+                # 元のデータフレームにマージ
+                abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
+                df_work['Class_abc'] = df_work['P_code'].map(abc_mapping)
+            else:
+                # 実績値が全て0の場合はC区分を割り当て
+                df_work['Class_abc'] = 'C'
         else:
-            df_work['Class_abc'] = 'C'
+            # 商品コードがない場合は行別に処理
+            df_sorted = df_work.sort_values(base_column, ascending=False)
+            total_actual = df_sorted[base_column].sum()
+            
+            if total_actual > 0:
+                df_sorted['cumsum'] = df_sorted[base_column].cumsum()
+                df_sorted['cumsum_ratio'] = df_sorted['cumsum'] / total_actual
+                
+                # ABC区分を割り当て（累積構成比に基づく）
+                df_sorted['Class_abc'] = 'C'  # デフォルト
+                
+                # 区分を構成比の順序で処理（小さい順）
+                sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
+                
+                for category in sorted_categories:
+                    # 累積構成比がこの区分の範囲内の行を対象
+                    if category['start_ratio'] == 0:
+                        mask = df_sorted['cumsum_ratio'] <= category['end_ratio']
+                    else:
+                        mask = (df_sorted['cumsum_ratio'] > category['start_ratio']) & \
+                               (df_sorted['cumsum_ratio'] <= category['end_ratio'])
+                    df_sorted.loc[mask, 'Class_abc'] = category['name']
+                
+                # 元のインデックス順に戻す
+                df_work = df_sorted.sort_index()
+            else:
+                df_work['Class_abc'] = 'C'
     
     return df_work
 
@@ -258,6 +306,7 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
             total_actual = product_data[base_column].sum()
             
             summary['totals'] = abc_totals.to_dict()
+            summary['actual_sums'] = abc_totals.to_dict()  # 実績合計として追加
             summary['ratios'] = (abc_totals / total_actual * 100).round(2).to_dict() if total_actual > 0 else {}
             summary['total_actual'] = total_actual
     else:
@@ -270,6 +319,7 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
             total_actual = df_work[base_column].sum()
             
             summary['totals'] = abc_totals.to_dict()
+            summary['actual_sums'] = abc_totals.to_dict()  # 実績合計として追加
             summary['ratios'] = (abc_totals / total_actual * 100).round(2).to_dict() if total_actual > 0 else {}
             summary['total_actual'] = total_actual
     

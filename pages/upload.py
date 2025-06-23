@@ -144,10 +144,10 @@ def show():
             
         with col2:
             st.markdown("**任意項目**")
-            mapping['Class_01'] = st.selectbox(
-                "分類（Class_01）",
+            mapping['category_code'] = st.selectbox(
+                "分類（category_code）",
                 options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_01', '')),
+                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('category_code', '')),
                 help=HELP_TEXTS['class_01_help']
             )
             mapping['Plan_02'] = st.selectbox(
@@ -486,17 +486,38 @@ def show():
             # ABC区分の集計結果表示
             if 'Class_abc' in st.session_state.data.columns:
                 st.subheader("6. ABC区分集計結果")
-                abc_summary = get_abc_classification_summary(st.session_state.data, 'Class_abc', 'Actual')
+                
+                # 分類フィルターの追加
+                if 'category_code' in st.session_state.data.columns and st.session_state.data['category_code'].notna().any():
+                    categories = ['全分類'] + sorted(st.session_state.data['category_code'].dropna().unique().tolist())
+                    selected_category = st.selectbox(
+                        "分類：",
+                        options=categories,
+                        key="abc_category_filter"
+                    )
+                    
+                    # フィルター適用
+                    if selected_category == '全分類':
+                        filtered_abc_data = st.session_state.data
+                        category_display = ""
+                    else:
+                        filtered_abc_data = st.session_state.data[st.session_state.data['category_code'] == selected_category]
+                        category_display = f"分類：{selected_category}"
+                else:
+                    filtered_abc_data = st.session_state.data
+                    category_display = ""
+                
+                abc_summary = get_abc_classification_summary(filtered_abc_data, 'Class_abc', 'Actual')
                 
                 if abc_summary:
                     # 2カラムレイアウト：左側に統合表、右側に読み込み済みデータ情報
                     col_left, col_right = st.columns([2, 1])
                     
                     with col_left:
-                        # 統合表の作成
+                        # 統合表の作成（実績合計を追加）
                         abc_result_data = []
                         total_count = 0
-                        total_ratio = 0
+                        total_actual = 0
                         
                         # 区分順に並べるため、A,B,C,D,...の順でソート
                         sorted_categories = sorted(abc_summary['counts'].keys())
@@ -504,29 +525,51 @@ def show():
                         for category in sorted_categories:
                             count = abc_summary['counts'].get(category, 0)
                             ratio = abc_summary['ratios'].get(category, 0)
+                            actual_sum = abc_summary['actual_sums'].get(category, 0)
+                            
                             abc_result_data.append({
                                 'ABC区分': f"{category}区分",
                                 '件数': count,
-                                '構成比率（％）': f"{ratio:.2f}"
+                                '実績合計': int(actual_sum),
+                                '構成比率（%）': f"{ratio:.2f}%"
                             })
                             total_count += count
-                            total_ratio += ratio
+                            total_actual += actual_sum
+                        
+                        # 構成比率の合計を100.00%に調整
+                        if abc_result_data and total_actual > 0:
+                            current_total_ratio = sum(abc_summary['ratios'].values())
+                            if abs(current_total_ratio - 100.0) > 0.01:  # 誤差がある場合のみ調整
+                                # 最大の区分に差分を加算
+                                max_category = max(sorted_categories, key=lambda x: abc_summary['ratios'][x])
+                                adjustment = 100.0 - current_total_ratio
+                                for item in abc_result_data:
+                                    if item['ABC区分'] == f"{max_category}区分":
+                                        current_ratio = float(item['構成比率（%）'].replace('%', ''))
+                                        adjusted_ratio = current_ratio + adjustment
+                                        item['構成比率（%）'] = f"{adjusted_ratio:.2f}%"
+                                        break
                         
                         # 合計行を追加
                         abc_result_data.append({
                             'ABC区分': '合計',
                             '件数': total_count,
-                            '構成比率（％）': f"{total_ratio:.2f}"
+                            '実績合計': int(total_actual),
+                            '構成比率（%）': "100.00%"
                         })
                         
                         # データフレーム作成（インデックスなし）
                         result_df = pd.DataFrame(abc_result_data)
                         st.dataframe(result_df, use_container_width=True, hide_index=True)
+                        
+                        # 分類表示
+                        if category_display:
+                            st.markdown(f"**{category_display}**")
                     
                     with col_right:
                         # 読み込み済みデータ情報を右側に配置
-                        if st.session_state.data is not None:
-                            df = st.session_state.data
+                        if filtered_abc_data is not None:
+                            df = filtered_abc_data
                             
                             # 期間の年月フォーマット変換
                             def format_date(date_val):
@@ -548,8 +591,33 @@ def show():
             # 年月別集計結果の追加
             if 'Date' in st.session_state.data.columns:
                 st.subheader("7. 年月別集計結果")
-                monthly_summary_df = create_monthly_summary_table(st.session_state.data)
+                
+                # 分類フィルターの追加
+                if 'category_code' in st.session_state.data.columns and st.session_state.data['category_code'].notna().any():
+                    categories = ['全分類'] + sorted(st.session_state.data['category_code'].dropna().unique().tolist())
+                    selected_category_monthly = st.selectbox(
+                        "分類：",
+                        options=categories,
+                        key="monthly_category_filter"
+                    )
+                    
+                    # フィルター適用
+                    if selected_category_monthly == '全分類':
+                        filtered_monthly_data = st.session_state.data
+                        category_display_monthly = ""
+                    else:
+                        filtered_monthly_data = st.session_state.data[st.session_state.data['category_code'] == selected_category_monthly]
+                        category_display_monthly = f"分類：{selected_category_monthly}"
+                else:
+                    filtered_monthly_data = st.session_state.data
+                    category_display_monthly = ""
+                
+                monthly_summary_df = create_monthly_summary_table(filtered_monthly_data)
                 if not monthly_summary_df.empty:
+                    # 分類表示
+                    if category_display_monthly:
+                        st.markdown(f"**{category_display_monthly}**")
+                    
                     st.dataframe(monthly_summary_df, use_container_width=True, hide_index=True)
                     st.markdown("**※ 月別合計値補正を実施した場合は、AI予測および計画値の月別合計が一致しているかをご確認ください。**")
                 else:
@@ -838,8 +906,8 @@ def apply_monthly_correction(df):
     corrected_df = df.copy()
     
     # 分類カラムが存在する場合は分類ごとに補正
-    if 'Class_01' in df.columns and df['Class_01'].notna().any():
-        category_col = 'Class_01'
+    if 'category_code' in df.columns and df['category_code'].notna().any():
+        category_col = 'category_code'
         categories = df[category_col].dropna().unique()
     else:
         # 分類がない場合は全体で補正

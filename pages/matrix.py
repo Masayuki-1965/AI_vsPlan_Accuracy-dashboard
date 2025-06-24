@@ -72,13 +72,15 @@ def create_filter_ui(df):
         # ABC区分フィルター
         if 'Class_abc' in df.columns:
             abc_values = sorted(df['Class_abc'].dropna().unique().tolist())
-            default_abc = ['A', 'B', 'C'] if all(x in abc_values for x in ['A', 'B', 'C']) else abc_values[:3]
+            # 未分類を除いたデフォルト選択
+            abc_values_without_unclassified = [x for x in abc_values if x != '未分類']
+            default_abc = ['A', 'B', 'C'] if all(x in abc_values_without_unclassified for x in ['A', 'B', 'C']) else abc_values_without_unclassified[:3]
             
             selected_abc = st.multiselect(
                 "ABC区分表示",
                 abc_values,
                 default=default_abc,
-                help="最大3つまで選択可能"
+                help="最大3つまで選択可能（未分類も選択可能）"
             )
             filter_settings['abc_categories'] = selected_abc[:3]  # 最大3つまで
         else:

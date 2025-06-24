@@ -86,14 +86,16 @@ def get_data_summary(df):
     
     return summary
 
-def calculate_abc_classification(df, categories=None, base_column='Actual'):
+def calculate_abc_classification(df, categories=None, base_column='Actual', target_categories=None, preserve_existing=False):
     """
-    実績値に基づいてABC区分を自動計算（分類単位対応）
+    実績値に基づいてABC区分を自動計算（分類単位対応・部分上書き対応）
     
     Args:
         df: データフレーム
         categories: 区分設定のリスト [{'name': 'A', 'start_ratio': 0.0, 'end_ratio': 0.5}, ...]
         base_column: 基準となるカラム名（デフォルト：'Actual'）
+        target_categories: 自動生成対象の分類リスト（Noneの場合は全分類対象）
+        preserve_existing: 既存のABC区分を保持するかどうか
     
     Returns:
         ABC区分が追加されたデータフレーム
@@ -115,53 +117,69 @@ def calculate_abc_classification(df, categories=None, base_column='Actual'):
     # NaNや負の値を0に変換
     df_work[base_column] = df_work[base_column].fillna(0).clip(lower=0)
     
-    # 分類（category_code）が存在する場合は分類単位で処理
+    # 既存のABC区分を保持する場合は、Class_abcカラムを初期化
+    if preserve_existing and 'Class_abc' in df_work.columns:
+        # 既存の値を保持
+        pass
+    else:
+        # 新規作成または全上書きの場合
+        df_work['Class_abc'] = pd.NA
+    
+    # 分類別に処理
     if 'category_code' in df_work.columns and df_work['category_code'].notna().any():
-        # 分類別にABC区分を計算
-        for category_code in df_work['category_code'].dropna().unique():
+        # 処理対象の分類を決定
+        if target_categories is not None:
+            # 指定された分類のみ処理
+            categories_list = [cat for cat in df_work['category_code'].dropna().unique() if cat in target_categories]
+        else:
+            # 全分類を処理
+            categories_list = df_work['category_code'].dropna().unique()
+        
+        for category_code in categories_list:
             category_data = df_work[df_work['category_code'] == category_code]
             
-            # 商品コード別の実績値合計を計算（分類内で）
-            if 'P_code' in category_data.columns:
-                # 商品コード別に実績値を集計
-                product_totals = category_data.groupby('P_code')[base_column].sum().reset_index()
-                product_totals = product_totals.sort_values(base_column, ascending=False)
+            # 商品コード別の実績値合計を計算
+            product_totals = category_data.groupby('P_code')[base_column].sum().reset_index()
+            product_totals = product_totals.sort_values(base_column, ascending=False)
+            
+            # 分類内の実績値合計
+            total_actual = product_totals[base_column].sum()
+            
+            if total_actual > 0:
+                # 累積構成比を計算
+                product_totals['cumsum'] = product_totals[base_column].cumsum()
+                product_totals['cumsum_ratio'] = product_totals['cumsum'] / total_actual
                 
-                # 分類内の実績値合計
-                total_actual = product_totals[base_column].sum()
+                # ABC区分を割り当て（累積構成比に基づく）
+                product_totals['Class_abc'] = 'C'  # デフォルト
                 
-                if total_actual > 0:
-                    # 累積構成比を計算
-                    product_totals['cumsum'] = product_totals[base_column].cumsum()
-                    product_totals['cumsum_ratio'] = product_totals['cumsum'] / total_actual
-                    
-                    # ABC区分を割り当て（累積構成比に基づく）
-                    product_totals['Class_abc'] = 'C'  # デフォルト
-                    
-                    # 区分を構成比の順序で処理（小さい順）
-                    sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
-                    
-                    for category in sorted_categories:
-                        # 累積構成比がこの区分の範囲内の商品を対象
-                        if category['start_ratio'] == 0:
-                            mask = product_totals['cumsum_ratio'] <= category['end_ratio']
-                        else:
-                            mask = (product_totals['cumsum_ratio'] > category['start_ratio']) & \
-                                   (product_totals['cumsum_ratio'] <= category['end_ratio'])
-                        product_totals.loc[mask, 'Class_abc'] = category['name']
-                    
-                    # 元のデータフレームにマージ（該当分類のみ）
-                    abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
-                    mask = df_work['category_code'] == category_code
-                    df_work.loc[mask, 'Class_abc'] = df_work.loc[mask, 'P_code'].map(abc_mapping)
-                else:
-                    # 実績値が全て0の場合はC区分を割り当て
-                    mask = df_work['category_code'] == category_code
-                    df_work.loc[mask, 'Class_abc'] = 'C'
+                # 区分を構成比の順序で処理（小さい順）
+                sorted_categories = sorted(categories, key=lambda x: x['start_ratio'])
+                
+                for category in sorted_categories:
+                    # 累積構成比がこの区分の範囲内の商品を対象
+                    if category['start_ratio'] == 0:
+                        mask = product_totals['cumsum_ratio'] <= category['end_ratio']
+                    else:
+                        mask = (product_totals['cumsum_ratio'] > category['start_ratio']) & \
+                               (product_totals['cumsum_ratio'] <= category['end_ratio'])
+                    product_totals.loc[mask, 'Class_abc'] = category['name']
+                
+                # 元のデータフレームにマージ（該当分類のみ）
+                abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
+                mask = df_work['category_code'] == category_code
+                df_work.loc[mask, 'Class_abc'] = df_work.loc[mask, 'P_code'].map(abc_mapping)
+            else:
+                # 実績値が全て0の場合はC区分を割り当て
+                mask = df_work['category_code'] == category_code
+                df_work.loc[mask, 'Class_abc'] = 'C'
         
-        # 分類が設定されていない行にもC区分を割り当て
-        mask_no_category = df_work['category_code'].isna()
-        df_work.loc[mask_no_category, 'Class_abc'] = 'C'
+        # 処理されなかった分類または分類が設定されていない行の処理
+        if not preserve_existing:
+            # 分類が設定されていない行にもC区分を割り当て
+            mask_no_category = df_work['category_code'].isna()
+            df_work.loc[mask_no_category, 'Class_abc'] = 'C'
+        # preserve_existing=Trueの場合、未処理の行は既存値またはNaNのまま保持
         
     else:
         # 分類がない場合は従来通りの全体処理
@@ -229,6 +247,11 @@ def calculate_abc_classification(df, categories=None, base_column='Actual'):
             else:
                 df_work['Class_abc'] = 'C'
     
+    # 未分類（NaN）の処理
+    mask_unclassified = df_work['Class_abc'].isna()
+    if mask_unclassified.any():
+        df_work.loc[mask_unclassified, 'Class_abc'] = '未分類'
+    
     return df_work
 
 def validate_abc_categories(categories):
@@ -267,7 +290,7 @@ def validate_abc_categories(categories):
 
 def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actual'):
     """
-    ABC区分の集計結果を取得（商品コード単位で集計）
+    ABC区分の集計結果を取得（商品コード単位で集計・未分類対応）
     
     Args:
         df: データフレーム
@@ -285,6 +308,9 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
     if base_column in df_work.columns:
         df_work[base_column] = pd.to_numeric(df_work[base_column], errors='coerce').fillna(0)
     
+    # ABC区分の未分類処理
+    df_work[abc_column] = df_work[abc_column].fillna('未分類')
+    
     # ABC区分別の集計
     summary = {}
     
@@ -296,12 +322,12 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
             abc_column: 'first'  # 各商品コードのABC区分（同一商品は同じ区分なので最初の値を取得）
         }).reset_index()
         
-        # 区分別の商品コード数
+        # 区分別の商品コード数（未分類も含む）
         abc_counts = product_data[abc_column].value_counts().sort_index()
         summary['counts'] = abc_counts.to_dict()
         
         if base_column in df_work.columns:
-            # 区分別の実績値合計
+            # 区分別の実績値合計（未分類も含む）
             abc_totals = product_data.groupby(abc_column)[base_column].sum().sort_index()
             total_actual = product_data[base_column].sum()
             
@@ -323,4 +349,257 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
             summary['ratios'] = (abc_totals / total_actual * 100).round(2).to_dict() if total_actual > 0 else {}
             summary['total_actual'] = total_actual
     
-    return summary 
+    return summary
+
+def calculate_abc_classification_by_quantity(df, categories=None, base_column='Actual', target_categories=None, preserve_existing=False):
+    """
+    月平均実績値に基づいてABC区分を数量範囲で自動計算（分類単位対応・部分上書き対応）
+    
+    Args:
+        df: データフレーム
+        categories: 区分設定のリスト [{'name': 'A', 'min_value': 100}, {'name': 'B', 'min_value': 50}, ...]
+        base_column: 基準となるカラム名（デフォルト：'Actual'）
+        target_categories: 自動生成対象の分類リスト（Noneの場合は全分類対象）
+        preserve_existing: 既存のABC区分を保持するかどうか
+    
+    Returns:
+        ABC区分が追加されたデータフレーム
+    """
+    if df is None or df.empty:
+        return df
+    
+    if base_column not in df.columns:
+        raise ValueError(f"基準カラム '{base_column}' がデータに存在しません")
+    
+    # デフォルト設定（ダミー - 実際は呼び出し側で設定）
+    if categories is None:
+        return df
+    
+    # 基準カラムの数値チェック
+    df_work = df.copy()
+    df_work[base_column] = pd.to_numeric(df_work[base_column], errors='coerce')
+    
+    # NaNや負の値を0に変換
+    df_work[base_column] = df_work[base_column].fillna(0).clip(lower=0)
+    
+    # 既存のABC区分を保持する場合は、Class_abcカラムを初期化
+    if preserve_existing and 'Class_abc' in df_work.columns:
+        # 既存の値を保持
+        pass
+    else:
+        # 新規作成または全上書きの場合
+        df_work['Class_abc'] = pd.NA
+    
+    # 分類別に処理
+    if 'category_code' in df_work.columns and df_work['category_code'].notna().any():
+        # 処理対象の分類を決定
+        if target_categories is not None:
+            # 指定された分類のみ処理
+            categories_list = [cat for cat in df_work['category_code'].dropna().unique() if cat in target_categories]
+        else:
+            # 全分類を処理
+            categories_list = df_work['category_code'].dropna().unique()
+        
+        for category_code in categories_list:
+            category_data = df_work[df_work['category_code'] == category_code]
+            
+            # 商品コード別の月平均実績値を計算
+            monthly_averages = calculate_monthly_average_actual(category_data, base_column)
+            
+            # 数量範囲に基づいてABC区分を割り当て
+            for product_code, monthly_avg_value in monthly_averages.items():
+                # デフォルトは最後の区分
+                assigned_category = categories[-1]['name']
+                
+                # 上位の区分から順番にチェック（数量の多い順）
+                for category in categories:
+                    if monthly_avg_value >= category.get('min_value', 0):
+                        assigned_category = category['name']
+                        break
+                
+                # 該当分類の商品コードにABC区分を割り当て
+                mask = (df_work['category_code'] == category_code) & (df_work['P_code'] == product_code)
+                df_work.loc[mask, 'Class_abc'] = assigned_category
+        
+        # 処理されなかった分類または分類が設定されていない行の処理
+        if not preserve_existing:
+            # 分類が設定されていない行にも最後の区分を割り当て
+            mask_no_category = df_work['category_code'].isna()
+            df_work.loc[mask_no_category, 'Class_abc'] = categories[-1]['name']
+        # preserve_existing=Trueの場合、未処理の行は既存値またはNaNのまま保持
+        
+    else:
+        # 分類がない場合は全体処理
+        if 'P_code' in df_work.columns:
+            # 商品コード別の月平均実績値を計算
+            monthly_averages = calculate_monthly_average_actual(df_work, base_column)
+            
+            # ABC区分を割り当て
+            for product_code, monthly_avg_value in monthly_averages.items():
+                # デフォルトは最後の区分
+                assigned_category = categories[-1]['name']
+                
+                # 上位の区分から順番にチェック（数量の多い順）
+                for category in categories:
+                    if monthly_avg_value >= category.get('min_value', 0):
+                        assigned_category = category['name']
+                        break
+                
+                # 商品コードにABC区分を割り当て
+                mask = df_work['P_code'] == product_code
+                df_work.loc[mask, 'Class_abc'] = assigned_category
+        else:
+            # 商品コードがない場合は行別に処理（月平均を計算するのが困難なので通常の実績値を使用）
+            for index, row in df_work.iterrows():
+                actual_value = row[base_column]
+                
+                # デフォルトは最後の区分
+                assigned_category = categories[-1]['name']
+                
+                # 上位の区分から順番にチェック（数量の多い順）
+                for category in categories:
+                    if actual_value >= category.get('min_value', 0):
+                        assigned_category = category['name']
+                        break
+                
+                df_work.loc[index, 'Class_abc'] = assigned_category
+    
+    # 未分類（NaN）の処理
+    mask_unclassified = df_work['Class_abc'].isna()
+    if mask_unclassified.any():
+        df_work.loc[mask_unclassified, 'Class_abc'] = '未分類'
+    
+    return df_work
+
+def validate_abc_quantity_categories(categories):
+    """
+    ABC区分数量範囲設定の妥当性をチェック
+    
+    Args:
+        categories: 区分設定のリスト [{'name': 'A', 'min_value': 100}, ...]
+    
+    Returns:
+        (is_valid, error_message)
+    """
+    if not categories:
+        return False, "区分設定が空です"
+    
+    # 重複チェック
+    names = [cat['name'] for cat in categories]
+    if len(names) != len(set(names)):
+        return False, "区分名に重複があります"
+    
+    # 数量範囲の妥当性チェック
+    for cat in categories:
+        min_value = cat.get('min_value', 0)
+        if min_value < 0:
+            return False, f"区分 '{cat['name']}' の下限値が負の値です"
+    
+    # 数量範囲の重複チェック（上位区分ほど下限値が大きい必要がある）
+    sorted_categories = sorted(categories, key=lambda x: x.get('min_value', 0), reverse=True)
+    for i in range(len(sorted_categories) - 1):
+        current_min = sorted_categories[i].get('min_value', 0)
+        next_min = sorted_categories[i+1].get('min_value', 0)
+        if current_min <= next_min:
+            return False, f"区分 '{sorted_categories[i]['name']}' の下限値が '{sorted_categories[i+1]['name']}' 以下です"
+    
+    return True, ""
+
+def calculate_monthly_average_actual(df, base_column='Actual'):
+    """
+    月平均実績値を計算（商品コード別）
+    
+    Args:
+        df: データフレーム
+        base_column: 基準となるカラム名（デフォルト：'Actual'）
+    
+    Returns:
+        商品コード別月平均実績値の辞書
+    """
+    if df is None or df.empty or 'P_code' not in df.columns:
+        return {}
+    
+    if base_column not in df.columns:
+        return {}
+    
+    # 数値化
+    df_work = df.copy()
+    df_work[base_column] = pd.to_numeric(df_work[base_column], errors='coerce').fillna(0)
+    df_work['Date'] = pd.to_numeric(df_work['Date'], errors='coerce')
+    
+    # 期間の月数を計算
+    if 'Date' in df_work.columns:
+        unique_dates = df_work['Date'].dropna().unique()
+        month_count = len(unique_dates) if len(unique_dates) > 0 else 1
+    else:
+        month_count = 1
+    
+    # 商品コード別の全期間実績値合計を計算
+    product_totals = df_work.groupby('P_code')[base_column].sum()
+    
+    # 月平均を計算
+    monthly_averages = product_totals / month_count
+    
+    return monthly_averages.to_dict()
+
+def calculate_default_quantity_ranges(df, base_column='Actual'):
+    """
+    データに基づいてデフォルトの数量範囲を計算
+    
+    Args:
+        df: データフレーム
+        base_column: 基準となるカラム名（デフォルト：'Actual'）
+    
+    Returns:
+        デフォルト数量範囲のリスト
+    """
+    if df is None or df.empty:
+        return [
+            {'name': 'A', 'min_value': 1000},
+            {'name': 'B', 'min_value': 100},
+            {'name': 'C', 'min_value': 0}
+        ]
+    
+    try:
+        # 月平均実績値を計算
+        monthly_averages = calculate_monthly_average_actual(df, base_column)
+        
+        if not monthly_averages:
+            return [
+                {'name': 'A', 'min_value': 1000},
+                {'name': 'B', 'min_value': 100},
+                {'name': 'C', 'min_value': 0}
+            ]
+        
+        # 月平均実績値を降順でソート
+        sorted_averages = sorted(monthly_averages.values(), reverse=True)
+        
+        if len(sorted_averages) == 0:
+            a_threshold = 1000
+            b_threshold = 100
+        else:
+            # A区分（上位50%相当）の下限値
+            a_index = int(len(sorted_averages) * 0.5)
+            a_threshold = max(1, int(sorted_averages[a_index])) if a_index < len(sorted_averages) else 1
+            
+            # B区分（上位90%相当）の下限値
+            b_index = int(len(sorted_averages) * 0.9)
+            b_threshold = max(1, int(sorted_averages[b_index])) if b_index < len(sorted_averages) else 1
+            
+            # A区分とB区分の下限値が同じ場合の調整
+            if a_threshold <= b_threshold:
+                a_threshold = b_threshold + 1
+        
+        return [
+            {'name': 'A', 'min_value': a_threshold},
+            {'name': 'B', 'min_value': b_threshold},
+            {'name': 'C', 'min_value': 0}
+        ]
+        
+    except Exception:
+        # エラーが発生した場合はデフォルト値を返す
+        return [
+            {'name': 'A', 'min_value': 1000},
+            {'name': 'B', 'min_value': 100},
+            {'name': 'C', 'min_value': 0}
+        ] 

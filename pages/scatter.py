@@ -288,10 +288,10 @@ def calculate_abc_average_errors(df, selected_predictions):
     for pred_col in selected_predictions:
         df_with_errors = calculate_error_rates(df, pred_col, 'Actual')
         
-        # ABC区分別の加重平均誤差率計算（全区分対応・未分類対応）
+        # ABC区分別の加重平均誤差率計算（全区分対応・未区分対応）
         abc_stats = {}
-        # 未分類（NaN）も含めて処理
-        df_with_errors['Class_abc'] = df_with_errors['Class_abc'].fillna('未分類')
+        # 未区分（NaN）も含めて処理
+        df_with_errors['Class_abc'] = df_with_errors['Class_abc'].fillna('未区分')
         unique_abc_classes = sorted(df_with_errors['Class_abc'].unique())
         
         for abc_class in unique_abc_classes:

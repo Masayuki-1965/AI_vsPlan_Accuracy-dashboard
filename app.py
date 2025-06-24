@@ -52,6 +52,11 @@ if st.session_state.data is not None:
 else:
     st.sidebar.warning("⚠️ データが読み込まれていません")
 
+# 注釈の追加
+st.sidebar.markdown("---")
+st.sidebar.markdown("**最初からやり直す場合：**")
+st.sidebar.markdown("画面左上の更新ボタン（⟳）をクリックするか、Ctrl + R を押して、STEP1のデータ取り込みから再実行してください。")
+
 # 選択されたページを表示
 if selected_page in pages:
     pages[selected_page].show()

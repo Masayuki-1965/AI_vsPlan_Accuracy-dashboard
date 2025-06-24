@@ -99,7 +99,7 @@ def categorize_error_rates(df, error_rate_column):
                 choices.append(category['label'])
         
         # 有効なデータに対して誤差率区分を適用
-        valid_categories = np.select(conditions, choices, default='未分類')
+        valid_categories = np.select(conditions, choices, default='未区分')
         result.loc[valid_mask] = valid_categories
     
     return result

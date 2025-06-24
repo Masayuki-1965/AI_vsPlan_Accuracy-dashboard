@@ -117,13 +117,17 @@ def calculate_abc_classification(df, categories=None, base_column='Actual', targ
     # NaNや負の値を0に変換
     df_work[base_column] = df_work[base_column].fillna(0).clip(lower=0)
     
-    # 既存のABC区分を保持する場合は、Class_abcカラムを初期化
-    if preserve_existing and 'Class_abc' in df_work.columns:
-        # 既存の値を保持
-        pass
-    else:
-        # 新規作成または全上書きの場合
+    # ABC区分カラムの初期化処理（分類単位の部分更新に対応）
+    if 'Class_abc' not in df_work.columns:
+        # ABC区分カラムが存在しない場合は新規作成
         df_work['Class_abc'] = pd.NA
+    elif target_categories is not None:
+        # 分類を指定した部分更新の場合は既存値を保持
+        pass
+    elif not preserve_existing:
+        # 全体の新規作成または全上書きの場合のみ初期化
+        df_work['Class_abc'] = pd.NA
+    # preserve_existing=Trueの場合は既存値を保持
     
     # 分類別に処理
     if 'category_code' in df_work.columns and df_work['category_code'].notna().any():
@@ -168,18 +172,21 @@ def calculate_abc_classification(df, categories=None, base_column='Actual', targ
                 # 元のデータフレームにマージ（該当分類のみ）
                 abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
                 mask = df_work['category_code'] == category_code
-                df_work.loc[mask, 'Class_abc'] = df_work.loc[mask, 'P_code'].map(abc_mapping)
+                # 該当分類の商品コードのみを更新（既存値を保持）
+                for product_code, abc_class in abc_mapping.items():
+                    product_mask = mask & (df_work['P_code'] == product_code)
+                    df_work.loc[product_mask, 'Class_abc'] = abc_class
             else:
                 # 実績値が全て0の場合はC区分を割り当て
                 mask = df_work['category_code'] == category_code
                 df_work.loc[mask, 'Class_abc'] = 'C'
         
         # 処理されなかった分類または分類が設定されていない行の処理
-        if not preserve_existing:
-            # 分類が設定されていない行にもC区分を割り当て
+        if target_categories is None and not preserve_existing:
+            # 全分類処理の場合のみ、分類が設定されていない行にもC区分を割り当て
             mask_no_category = df_work['category_code'].isna()
             df_work.loc[mask_no_category, 'Class_abc'] = 'C'
-        # preserve_existing=Trueの場合、未処理の行は既存値またはNaNのまま保持
+        # target_categoriesが指定されている場合、未処理の分類や行は既存値またはNaNのまま保持
         
     else:
         # 分類がない場合は従来通りの全体処理
@@ -212,9 +219,11 @@ def calculate_abc_classification(df, categories=None, base_column='Actual', targ
                                (product_totals['cumsum_ratio'] <= category['end_ratio'])
                     product_totals.loc[mask, 'Class_abc'] = category['name']
                 
-                # 元のデータフレームにマージ
+                # 元のデータフレームにマージ（分類単位処理と同様に個別更新）
                 abc_mapping = dict(zip(product_totals['P_code'], product_totals['Class_abc']))
-                df_work['Class_abc'] = df_work['P_code'].map(abc_mapping)
+                for product_code, abc_class in abc_mapping.items():
+                    product_mask = df_work['P_code'] == product_code
+                    df_work.loc[product_mask, 'Class_abc'] = abc_class
             else:
                 # 実績値が全て0の場合はC区分を割り当て
                 df_work['Class_abc'] = 'C'
@@ -247,10 +256,12 @@ def calculate_abc_classification(df, categories=None, base_column='Actual', targ
             else:
                 df_work['Class_abc'] = 'C'
     
-    # 未分類（NaN）の処理
-    mask_unclassified = df_work['Class_abc'].isna()
-    if mask_unclassified.any():
-        df_work.loc[mask_unclassified, 'Class_abc'] = '未分類'
+    # 未区分（NaN）の処理（分類単位部分更新時は対象外分類の既存値を保持）
+    if target_categories is None:
+        # 全体処理の場合のみNaNを未区分に変換
+        mask_unclassified = df_work['Class_abc'].isna()
+        if mask_unclassified.any():
+            df_work.loc[mask_unclassified, 'Class_abc'] = '未区分'
     
     return df_work
 
@@ -290,7 +301,7 @@ def validate_abc_categories(categories):
 
 def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actual'):
     """
-    ABC区分の集計結果を取得（商品コード単位で集計・未分類対応）
+    ABC区分の集計結果を取得（商品コード単位で集計・未区分対応）
     
     Args:
         df: データフレーム
@@ -308,8 +319,8 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
     if base_column in df_work.columns:
         df_work[base_column] = pd.to_numeric(df_work[base_column], errors='coerce').fillna(0)
     
-    # ABC区分の未分類処理
-    df_work[abc_column] = df_work[abc_column].fillna('未分類')
+    # ABC区分の未区分処理
+    df_work[abc_column] = df_work[abc_column].fillna('未区分')
     
     # ABC区分別の集計
     summary = {}
@@ -322,12 +333,12 @@ def get_abc_classification_summary(df, abc_column='Class_abc', base_column='Actu
             abc_column: 'first'  # 各商品コードのABC区分（同一商品は同じ区分なので最初の値を取得）
         }).reset_index()
         
-        # 区分別の商品コード数（未分類も含む）
+        # 区分別の商品コード数（未区分も含む）
         abc_counts = product_data[abc_column].value_counts().sort_index()
         summary['counts'] = abc_counts.to_dict()
         
         if base_column in df_work.columns:
-            # 区分別の実績値合計（未分類も含む）
+            # 区分別の実績値合計（未区分も含む）
             abc_totals = product_data.groupby(abc_column)[base_column].sum().sort_index()
             total_actual = product_data[base_column].sum()
             
@@ -382,13 +393,17 @@ def calculate_abc_classification_by_quantity(df, categories=None, base_column='A
     # NaNや負の値を0に変換
     df_work[base_column] = df_work[base_column].fillna(0).clip(lower=0)
     
-    # 既存のABC区分を保持する場合は、Class_abcカラムを初期化
-    if preserve_existing and 'Class_abc' in df_work.columns:
-        # 既存の値を保持
-        pass
-    else:
-        # 新規作成または全上書きの場合
+    # ABC区分カラムの初期化処理（分類単位の部分更新に対応）
+    if 'Class_abc' not in df_work.columns:
+        # ABC区分カラムが存在しない場合は新規作成
         df_work['Class_abc'] = pd.NA
+    elif target_categories is not None:
+        # 分類を指定した部分更新の場合は既存値を保持
+        pass
+    elif not preserve_existing:
+        # 全体の新規作成または全上書きの場合のみ初期化
+        df_work['Class_abc'] = pd.NA
+    # preserve_existing=Trueの場合は既存値を保持
     
     # 分類別に処理
     if 'category_code' in df_work.columns and df_work['category_code'].notna().any():
@@ -422,11 +437,11 @@ def calculate_abc_classification_by_quantity(df, categories=None, base_column='A
                 df_work.loc[mask, 'Class_abc'] = assigned_category
         
         # 処理されなかった分類または分類が設定されていない行の処理
-        if not preserve_existing:
-            # 分類が設定されていない行にも最後の区分を割り当て
+        if target_categories is None and not preserve_existing:
+            # 全分類処理の場合のみ、分類が設定されていない行にも最後の区分を割り当て
             mask_no_category = df_work['category_code'].isna()
             df_work.loc[mask_no_category, 'Class_abc'] = categories[-1]['name']
-        # preserve_existing=Trueの場合、未処理の行は既存値またはNaNのまま保持
+        # target_categoriesが指定されている場合、未処理の分類や行は既存値またはNaNのまま保持
         
     else:
         # 分類がない場合は全体処理
@@ -464,10 +479,12 @@ def calculate_abc_classification_by_quantity(df, categories=None, base_column='A
                 
                 df_work.loc[index, 'Class_abc'] = assigned_category
     
-    # 未分類（NaN）の処理
-    mask_unclassified = df_work['Class_abc'].isna()
-    if mask_unclassified.any():
-        df_work.loc[mask_unclassified, 'Class_abc'] = '未分類'
+    # 未区分（NaN）の処理（分類単位部分更新時は対象外分類の既存値を保持）
+    if target_categories is None:
+        # 全体処理の場合のみNaNを未区分に変換
+        mask_unclassified = df_work['Class_abc'].isna()
+        if mask_unclassified.any():
+            df_work.loc[mask_unclassified, 'Class_abc'] = '未区分'
     
     return df_work
 

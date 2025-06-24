@@ -495,139 +495,160 @@ def show():
                             ]
                             st.rerun()
         
-        # マッピング確認・保存
-        if st.button("マッピング設定を適用する", type="primary"):
-            # 必須項目チェック（ABC区分は除く - 自動生成するため）
-            required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
-            missing_fields = [field for field in required_fields if not mapping[field]]
-            
-            if missing_fields:
-                st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
-            else:
-                try:
-                    # データ変換
-                    mapped_df = apply_mapping(df, mapping)
-                    
-                    # ABC区分の処理（3つのパターンに対応）
-                    has_abc_column = bool(mapping.get('Class_abc'))
-                    needs_generation = st.session_state.abc_auto_generate or not has_abc_column
-                    has_selected_categories = bool(st.session_state.selected_generation_categories)
-                    
-                    if needs_generation and (not has_abc_column or has_selected_categories):
-                        # 【パターン②】部分上書き または 【パターン③】全体自動生成
-                        with st.status("🔄 ABC区分を自動生成中...", expanded=True) as status:
-                            st.write("📊 実績値データを分析中...")
+        # マッピング確認・保存（2つのボタンに分離）
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📋 マッピング設定を適用する", type="primary", use_container_width=True):
+                # 必須項目チェック（ABC区分は除く - 自動生成するため）
+                required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
+                missing_fields = [field for field in required_fields if not mapping[field]]
+                
+                if missing_fields:
+                    st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
+                else:
+                    try:
+                        # データ変換（ABC区分は既存値のみ使用）
+                        mapped_df = apply_mapping(df, mapping)
+                        
+                        # 基本検証
+                        if validate_mapped_data(mapped_df):
+                            # 月別合計値補正の実行
+                            if st.session_state.monthly_correction_enabled:
+                                with st.status("🔄 月別合計値補正を実行中...", expanded=True) as status:
+                                    st.write("📊 分類ごとの月別合計値を分析中...")
+                                    
+                                    try:
+                                        mapped_df = apply_monthly_correction(mapped_df)
+                                        st.write("✅ 月別合計値補正完了")
+                                        status.update(label="✅ 月別合計値補正完了", state="complete")
+                                    except Exception as e:
+                                        st.error(f"❌ 月別合計値補正エラー: {str(e)}")
+                                        status.update(label="❌ 月別合計値補正エラー", state="error")
+                                        return
                             
-                            # 区分設定の妥当性チェック
+                            st.session_state.data = mapped_df
+                            st.session_state.mapping = mapping
+                            st.session_state.mapping_completed = True
+                            st.success("✅ データマッピング完了！")
+                            
+                            # ABC区分がない場合の案内
+                            if 'Class_abc' not in mapped_df.columns or mapped_df['Class_abc'].isna().all():
+                                st.info("💡 ABC区分を自動生成する場合は、右側の「ABC区分を自動生成する」ボタンをお使いください。")
+                            
+                            st.rerun()
+                        else:
+                            st.error("❌ データ検証でエラーが発生しました")
+                            
+                    except Exception as e:
+                        st.error(f"❌ データ処理エラー: {str(e)}")
+        
+        with col2:
+            # ABC区分自動生成ボタン（別処理として分離）
+            abc_button_disabled = not st.session_state.get('mapping_completed', False)
+            if st.button("🔄 ABC区分を自動生成する", 
+                        type="secondary", 
+                        use_container_width=True,
+                        disabled=abc_button_disabled,
+                        help="先にマッピング設定を適用してください" if abc_button_disabled else "選択した分類のABC区分を自動生成します"):
+                
+                if st.session_state.get('data') is None:
+                    st.error("❌ 先にマッピング設定を適用してください")
+                    return
+                
+                # 現在のデータを取得
+                mapped_df = st.session_state.data.copy()
+                
+                # ABC区分の自動生成処理
+                has_selected_categories = bool(st.session_state.selected_generation_categories)
+                
+                # ABC区分生成処理を実行
+                # 【パターン②】部分上書き または 【パターン③】全体自動生成
+                with st.status("🔄 ABC区分を自動生成中...", expanded=True) as status:
+                    st.write("📊 実績値データを分析中...")
+                    
+                    # 区分設定の妥当性チェック
+                    if st.session_state.abc_setting_mode == 'ratio':
+                        is_valid, error_msg = validate_abc_categories(st.session_state.abc_categories)
+                        current_categories = st.session_state.abc_categories
+                    else:
+                        is_valid, error_msg = validate_abc_quantity_categories(st.session_state.abc_quantity_categories)
+                        current_categories = st.session_state.abc_quantity_categories
+                    
+                    if not is_valid:
+                        st.error(f"❌ ABC区分設定エラー: {error_msg}")
+                        status.update(label="❌ ABC区分設定エラー", state="error")
+                        return
+                    
+                    st.write("🔢 商品コード別実績値を集計中...")
+                    
+                    # パターン判定と処理
+                    target_categories = st.session_state.selected_generation_categories if has_selected_categories else None
+                    preserve_existing = True  # 既存ABC区分を常に保持
+                    
+                    try:
+                        if st.session_state.abc_setting_mode == 'ratio':
+                            mapped_df = calculate_abc_classification(
+                                mapped_df, 
+                                categories=current_categories,
+                                base_column='Actual',
+                                target_categories=target_categories,
+                                preserve_existing=preserve_existing
+                            )
+                        else:
+                            mapped_df = calculate_abc_classification_by_quantity(
+                                mapped_df, 
+                                categories=current_categories,
+                                base_column='Actual',
+                                target_categories=target_categories,
+                                preserve_existing=preserve_existing
+                            )
+                        st.write("✅ ABC区分の割り当て完了")
+                        
+                        # 処理モードの表示
+                        if target_categories:
+                            st.info(f"📝 選択した分類（{', '.join(target_categories)}）のABC区分を自動生成しました")
+                        else:
+                            st.info("📝 全データのABC区分を自動生成しました")
+                        
+                        # 生成結果の表示
+                        abc_summary = get_abc_classification_summary(mapped_df, 'Class_abc', 'Actual')
+                        if abc_summary:
+                            st.write("📈 集計結果:")
+                            
+                            # 各区分の詳細情報
                             if st.session_state.abc_setting_mode == 'ratio':
-                                is_valid, error_msg = validate_abc_categories(st.session_state.abc_categories)
-                                current_categories = st.session_state.abc_categories
+                                for category in sorted(current_categories, key=lambda x: x['start_ratio']):
+                                    cat_name = category['name']
+                                    count = abc_summary['counts'].get(cat_name, 0)
+                                    ratio = abc_summary['ratios'].get(cat_name, 0)
+                                    range_text = f"{category['start_ratio']*100:.0f}%-{category['end_ratio']*100:.0f}%"
+                                    st.write(f"　• {cat_name}区分({range_text}): {count}件 ({ratio:.1f}%)")
                             else:
-                                is_valid, error_msg = validate_abc_quantity_categories(st.session_state.abc_quantity_categories)
-                                current_categories = st.session_state.abc_quantity_categories
+                                for category in sorted(current_categories, key=lambda x: x.get('min_value', 0), reverse=True):
+                                    cat_name = category['name']
+                                    count = abc_summary['counts'].get(cat_name, 0)
+                                    ratio = abc_summary['ratios'].get(cat_name, 0)
+                                    min_val = category.get('min_value', 0)
+                                    st.write(f"　• {cat_name}区分({min_val}以上): {count}件 ({ratio:.1f}%)")
                             
-                            if not is_valid:
-                                st.error(f"❌ ABC区分設定エラー: {error_msg}")
-                                status.update(label="❌ ABC区分設定エラー", state="error")
-                                return
+                            # 未区分がある場合の警告
+                            if '未区分' in abc_summary['counts']:
+                                unclassified_count = abc_summary['counts']['未区分']
+                                st.warning(f"⚠️ 未区分の商品が{unclassified_count}件あります。必要に応じて追加で自動生成を実行してください。")
                             
-                            st.write("🔢 商品コード別実績値を集計中...")
+                            status.update(label="✅ ABC区分自動生成完了", state="complete")
+                        else:
+                            st.warning("⚠️ ABC区分の集計に問題があります")
                             
-                            # パターン判定と処理
-                            target_categories = st.session_state.selected_generation_categories if has_selected_categories else None
-                            preserve_existing = has_abc_column and has_selected_categories
-                            
-                            try:
-                                if st.session_state.abc_setting_mode == 'ratio':
-                                    mapped_df = calculate_abc_classification(
-                                        mapped_df, 
-                                        categories=current_categories,
-                                        base_column='Actual',
-                                        target_categories=target_categories,
-                                        preserve_existing=preserve_existing
-                                    )
-                                else:
-                                    mapped_df = calculate_abc_classification_by_quantity(
-                                        mapped_df, 
-                                        categories=current_categories,
-                                        base_column='Actual',
-                                        target_categories=target_categories,
-                                        preserve_existing=preserve_existing
-                                    )
-                                st.write("✅ ABC区分の割り当て完了")
-                                
-                                # 処理モードの表示
-                                if preserve_existing:
-                                    st.info(f"📝 選択した分類（{', '.join(target_categories)}）のABC区分を上書きしました")
-                                elif target_categories:
-                                    st.info(f"📝 選択した分類（{', '.join(target_categories)}）のABC区分を自動生成しました")
-                                else:
-                                    st.info("📝 全データのABC区分を自動生成しました")
-                                
-                                # 生成結果の表示
-                                abc_summary = get_abc_classification_summary(mapped_df, 'Class_abc', 'Actual')
-                                if abc_summary:
-                                    st.write("📈 集計結果:")
-                                    
-                                    # 各区分の詳細情報
-                                    if st.session_state.abc_setting_mode == 'ratio':
-                                        for category in sorted(current_categories, key=lambda x: x['start_ratio']):
-                                            cat_name = category['name']
-                                            count = abc_summary['counts'].get(cat_name, 0)
-                                            ratio = abc_summary['ratios'].get(cat_name, 0)
-                                            range_text = f"{category['start_ratio']*100:.0f}%-{category['end_ratio']*100:.0f}%"
-                                            st.write(f"　• {cat_name}区分({range_text}): {count}件 ({ratio:.1f}%)")
-                                    else:
-                                        for category in sorted(current_categories, key=lambda x: x.get('min_value', 0), reverse=True):
-                                            cat_name = category['name']
-                                            count = abc_summary['counts'].get(cat_name, 0)
-                                            ratio = abc_summary['ratios'].get(cat_name, 0)
-                                            min_val = category.get('min_value', 0)
-                                            st.write(f"　• {cat_name}区分({min_val}以上): {count}件 ({ratio:.1f}%)")
-                                    
-                                    # 未分類がある場合の警告
-                                    if '未分類' in abc_summary['counts']:
-                                        unclassified_count = abc_summary['counts']['未分類']
-                                        st.warning(f"⚠️ 未分類の商品が{unclassified_count}件あります。必要に応じて追加で自動生成を実行してください。")
-                                    
-                                    status.update(label="✅ ABC区分自動生成完了", state="complete")
-                                else:
-                                    st.warning("⚠️ ABC区分の集計に問題があります")
-                                    
-                            except Exception as e:
-                                st.error(f"❌ ABC区分計算エラー: {str(e)}")
-                                status.update(label="❌ ABC区分計算エラー", state="error")
-                                return
-                    else:
-                        # 【パターン①】既存のABC区分を使用
-                        st.info("📋 CSVファイルの既存ABC区分を使用します")
-                    
-                    # 基本検証
-                    if validate_mapped_data(mapped_df):
-                        # 月別合計値補正の実行
-                        if st.session_state.monthly_correction_enabled:
-                            with st.status("🔄 月別合計値補正を実行中...", expanded=True) as status:
-                                st.write("📊 分類ごとの月別合計値を分析中...")
-                                
-                                try:
-                                    mapped_df = apply_monthly_correction(mapped_df)
-                                    st.write("✅ 月別合計値補正完了")
-                                    status.update(label="✅ 月別合計値補正完了", state="complete")
-                                except Exception as e:
-                                    st.error(f"❌ 月別合計値補正エラー: {str(e)}")
-                                    status.update(label="❌ 月別合計値補正エラー", state="error")
-                                    return
-                        
+                        # セッション状態を更新
                         st.session_state.data = mapped_df
-                        st.session_state.mapping = mapping
-                        st.session_state.mapping_completed = True
-                        st.success("✅ データマッピング完了！他のページで分析を開始できます。")
                         st.rerun()
-                    else:
-                        st.error("❌ データ検証でエラーが発生しました")
                         
-                except Exception as e:
-                    st.error(f"❌ データ処理エラー: {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ ABC区分計算エラー: {str(e)}")
+                        status.update(label="❌ ABC区分計算エラー", state="error")
+                        return
         
         # マッピング完了後の表示
         if st.session_state.mapping_completed and st.session_state.data is not None:

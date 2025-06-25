@@ -15,12 +15,12 @@ COLUMN_MAPPING = {
     'AI_pred': 'AI予測値',
     'Plan_01': '計画値01',
     'Plan_02': '計画値02',
-    'category_code': '分類（category_code）',
+    'category_code': '分類',
     'Class_abc': 'ABC区分'
 }
 
-# 必須項目（ABC区分を必須に変更）
-REQUIRED_COLUMNS = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01', 'Class_abc']
+# 必須項目（ABC区分は任意項目に変更）
+REQUIRED_COLUMNS = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
 
 # 数値項目
 NUMERIC_COLUMNS = ['Actual', 'AI_pred', 'Plan_01', 'Plan_02']
@@ -91,7 +91,7 @@ DISPLAY_SETTINGS = {
 
 # アプリケーション情報
 APP_INFO = {
-    'title': '需要予測vs計画値比較分析ダッシュボード',
+    'title': 'AI需要予測 vs 計画値 精度比較分析ダッシュボード',
     'version': '1.0.0',
     'phase': 'Phase 1 (MVP-50%)',
     'icon': '📊'

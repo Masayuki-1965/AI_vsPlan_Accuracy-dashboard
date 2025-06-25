@@ -18,7 +18,50 @@ from config.constants import DATA_PROCESSING_CONSTANTS, UI_DISPLAY_CONSTANTS
 
 def show():
     """データセット作成ページを表示"""
-    st.header("🛠️ データセット作成")
+    
+    # カスタムCSS（UI/UXデザインガイド準拠）
+    st.markdown("""
+    <style>
+    .main-title {
+        font-size: 2.2em;
+        font-weight: bold;
+        color: #1976d2;
+        margin-bottom: 1em;
+        margin-top: 1em;
+    }
+    .main-description {
+        color: #666666;
+        font-size: 1.05em;
+        margin-bottom: 2em;
+        line-height: 1.6;
+    }
+    .step-title {
+        font-size: 1.4em;
+        font-weight: bold;
+        color: #1976d2;
+        border-left: 4px solid #1976d2;
+        padding-left: 12px;
+        margin-bottom: 1em;
+        margin-top: 2em;
+    }
+    .step-annotation {
+        color: #666666;
+        font-size: 0.95em;
+        margin-bottom: 1.2em;
+    }
+    .section-subtitle {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 0.8em;
+        margin-top: 1.2em;
+    }
+    .result-section {
+        margin-top: 1.5em;
+        margin-bottom: 2em;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
     # セッション状態の初期化
     if 'original_data' not in st.session_state:
@@ -29,31 +72,83 @@ def show():
         st.session_state.data_columns = []
     if 'current_mapping' not in st.session_state:
         st.session_state.current_mapping = {}
-    if 'encoding_info' not in st.session_state:
-        st.session_state.encoding_info = None
     if 'mapping_completed' not in st.session_state:
         st.session_state.mapping_completed = False
+    if 'monthly_correction_enabled' not in st.session_state:
+        st.session_state.monthly_correction_enabled = False
+    if 'monthly_correction_completed' not in st.session_state:
+        st.session_state.monthly_correction_completed = False
     if 'abc_categories' not in st.session_state:
         st.session_state.abc_categories = ABC_CLASSIFICATION_SETTINGS['default_categories'].copy()
     if 'abc_auto_generate' not in st.session_state:
         st.session_state.abc_auto_generate = True
     if 'abc_setting_mode' not in st.session_state:
-        st.session_state.abc_setting_mode = 'ratio'  # 'ratio' または 'quantity'
+        st.session_state.abc_setting_mode = 'ratio'
     if 'abc_quantity_categories' not in st.session_state:
         st.session_state.abc_quantity_categories = [
             {'name': 'A', 'min_value': 1000},
             {'name': 'B', 'min_value': 100},
             {'name': 'C', 'min_value': 0}
         ]
-    if 'monthly_correction_enabled' not in st.session_state:
-        st.session_state.monthly_correction_enabled = False
     if 'selected_generation_categories' not in st.session_state:
         st.session_state.selected_generation_categories = []
+    if 'abc_generation_completed' not in st.session_state:
+        st.session_state.abc_generation_completed = False
+    if 'custom_column_names' not in st.session_state:
+        st.session_state.custom_column_names = {
+            'Plan_01': '計画01',
+            'Plan_02': '計画02',
+            'AI_pred': 'AI予測値'
+        }
     
-    # アップロードセクション
-    st.subheader("1. CSVファイルアップロード")
+    # 大項目タイトル（STEP1スタイルに統一）
+    st.markdown("""
+    <div style="
+        background: #e8f4fd;
+        color: #1976d2;
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-align: left;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
+    ">
+        <h2 style="
+            font-size: 1.9rem;
+            margin: 0 0 0.8rem 0;
+            font-weight: 600;
+            color: #1976d2;
+        ">🛠️ データセット作成</h2>
+        <p style="
+            font-size: 1.2rem;
+            margin: 0;
+            color: #4a90e2;
+            line-height: 1.6;
+        ">このセクションでは、AI予測と現行計画値の精度比較分析に必要なCSVデータを読み込み、分析用データセットを作成します。</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # STEP 1: CSVファイルアップロード
+    show_step1()
+    
+    # STEP 2: データマッピング（データが読み込まれた場合のみ表示）
+    if st.session_state.original_data is not None:
+        show_step2()
+    
+    # STEP 3: 月別合計値補正（マッピングが完了した場合のみ表示）
+    if st.session_state.mapping_completed:
+        show_step3()
+    
+    # STEP 4: ABC区分自動生成（マッピングが完了した場合のみ表示）
+    if st.session_state.mapping_completed:
+        show_step4()
+
+def show_step1():
+    """STEP 1: CSVファイルアップロード"""
+    st.markdown('<div class="step-title">CSVファイルアップロード</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">Browse filesでファイルを指定、またはCSVファイルをドラッグ＆ドロップしてください。</div>', unsafe_allow_html=True)
+    
     uploaded_file = st.file_uploader(
-        "CSVファイルを選択してください",
+        "",
         type=['csv'],
         help=HELP_TEXTS['file_upload_help']
     )
@@ -72,772 +167,348 @@ def show():
                 st.session_state.data_columns = list(df.columns)
                 st.session_state.current_mapping = {}
                 st.session_state.mapping_completed = False
+                st.session_state.monthly_correction_completed = False
+                st.session_state.abc_generation_completed = False
                 
-                st.success(f"✅ ファイル読み込み成功: {len(df)}行 x {len(df.columns)}列")
+                st.success(f"✅ データを読み込みました（{len(df)}行×{len(df.columns)}列）。下記にプレビューを表示します。")
                 
             except Exception as e:
                 st.error(f"❌ ファイル読み込みエラー: {str(e)}")
                 return
     
-    # 保存されたデータがある場合の表示
+    # データプレビューの表示（読み込み済みファイル情報は削除）
     if st.session_state.original_data is not None:
-        df = st.session_state.original_data
-        
-        # ファイル情報表示
-        st.info(f"📁 読み込み済みファイル: {st.session_state.uploaded_filename}")
         
         # データプレビュー
-        st.subheader(f"2. データプレビュー（上位{DATA_PROCESSING_CONSTANTS['default_preview_rows']}件表示）")
-        # インデックスを1始まりに変更
+        st.markdown('<div class="result-section">', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-subtitle">データプレビュー（上位{DATA_PROCESSING_CONSTANTS["default_preview_rows"]}件）</div>', unsafe_allow_html=True)
+        
+        df = st.session_state.original_data
         preview_df = df.head(DATA_PROCESSING_CONSTANTS['default_preview_rows']).copy()
         preview_df.index = range(UI_DISPLAY_CONSTANTS['selectbox_start_index'], len(preview_df) + UI_DISPLAY_CONSTANTS['selectbox_start_index'])
         st.dataframe(preview_df, use_container_width=True)
-        
-        # データマッピング
-        st.subheader("3. データマッピング設定")
-        st.info("CSVのカラム名をシステム項目にマッピングしてください")
-        
-        # マッピング設定UI
-        mapping = {}
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**必須項目**")
-            mapping['P_code'] = st.selectbox(
-                "商品コード（P_code）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('P_code', '')),
-                help=HELP_TEXTS['product_code_help']
-            )
-            mapping['Date'] = st.selectbox(
-                "年月（Date）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Date', '')),
-                help=HELP_TEXTS['date_help']
-            )
-            mapping['Actual'] = st.selectbox(
-                "実績値（Actual）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Actual', '')),
-                help=HELP_TEXTS['actual_help']
-            )
-            mapping['AI_pred'] = st.selectbox(
-                "AI予測値（AI_pred）", 
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('AI_pred', '')),
-                help=HELP_TEXTS['ai_pred_help']
-            )
-            mapping['Plan_01'] = st.selectbox(
-                "計画値01（Plan_01）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_01', '')),
-                help=HELP_TEXTS['plan_01_help']
-            )
-            
-            # ABC区分を必須項目として追加
-            st.markdown("**ABC区分設定（必須）**")
-            mapping['Class_abc'] = st.selectbox(
-                "ABC区分（Class_abc）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
-                help=HELP_TEXTS['abc_class_help']
-            )
-            
-            # ABC区分の自動生成設定
-            abc_has_column = bool(mapping['Class_abc'])
-            if not abc_has_column:
-                st.info(ABC_EXPLANATION['auto_no_column'])
-                st.session_state.abc_auto_generate = True
-            else:
-                st.session_state.abc_auto_generate = st.checkbox(
-                    "ABC区分を自動生成で上書きする", 
-                    value=False,
-                    help="チェックすると、CSVのABC区分を無視して実績値から自動計算します"
-                )
-            
-        with col2:
-            st.markdown("**任意項目**")
-            mapping['category_code'] = st.selectbox(
-                "分類（category_code）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('category_code', '')),
-                help=HELP_TEXTS['class_01_help']
-            )
-            mapping['Plan_02'] = st.selectbox(
-                "計画値02（Plan_02）",
-                options=[''] + st.session_state.data_columns,
-                index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_02', '')),
-                help=HELP_TEXTS['plan_02_help']
-            )
-        
-        # 現在のマッピング状態を更新
-        st.session_state.current_mapping = mapping
-        
-        # 月別合計値補正設定の追加
-        st.markdown("---")
-        st.markdown("**月別合計値補正設定**")
-        st.session_state.monthly_correction_enabled = st.checkbox(
-            "月別合計値補正を有効にする",
-            value=st.session_state.monthly_correction_enabled,
-            help="分類ごとの月別合計値を計画値01に合わせて調整します。AI予測および計画値02（存在する場合）が対象となります。"
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def show_step2():
+    """STEP 2: データマッピング"""
+    st.markdown('<div class="step-title">データマッピング</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">📋 CSVのカラム名をシステム項目にマッピングしてください（基本的に1回のみ実行）。</div>', unsafe_allow_html=True)
+    
+    # マッピング設定UI
+    mapping = {}
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**必須項目**")
+        mapping['P_code'] = st.selectbox(
+            "商品コード（P_code）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('P_code', '')),
+            help=HELP_TEXTS['product_code_help']
+        )
+        mapping['Date'] = st.selectbox(
+            "年月（Date）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Date', '')),
+            help=HELP_TEXTS['date_help']
+        )
+        mapping['Actual'] = st.selectbox(
+            "実績値（Actual）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Actual', '')),
+            help=HELP_TEXTS['actual_help']
+        )
+        mapping['AI_pred'] = st.selectbox(
+            "AI予測値（AI_pred）", 
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('AI_pred', '')),
+            help=HELP_TEXTS['ai_pred_help']
+        )
+        mapping['Plan_01'] = st.selectbox(
+            "計画値01（Plan_01）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_01', '')),
+            help=HELP_TEXTS['plan_01_help']
         )
         
-        if st.session_state.monthly_correction_enabled:
-            st.info("💡 補正ロジック：\n- AI予測の月別合計値 ← 計画値01の月別合計値に調整\n- 計画値02の月別合計値 ← 計画値01の月別合計値に調整（存在する場合）")
+    with col2:
+        st.markdown("**任意項目**")
+        mapping['category_code'] = st.selectbox(
+            "分類（category_code）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('category_code', '')),
+            help=HELP_TEXTS['class_01_help']
+        )
+        mapping['Plan_02'] = st.selectbox(
+            "計画値02（Plan_02）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Plan_02', '')),
+            help=HELP_TEXTS['plan_02_help']
+        )
         
-        # ABC区分設定エクスパンダー（常に表示）
-        with st.expander("🔧 ABC区分自動生成設定", expanded=st.session_state.abc_auto_generate):
-                # 現在の状態表示
-                if st.session_state.abc_auto_generate:
-                    st.success(ABC_EXPLANATION['auto_mode'])
-                else:
-                    st.info(ABC_EXPLANATION['manual_mode'])
-                
-                # 分類単位での自動生成設定
-                st.markdown("### 自動生成対象の分類選択")
-                if mapping.get('category_code') and st.session_state.original_data is not None:
-                    category_column = mapping['category_code']
-                    if category_column in st.session_state.original_data.columns:
-                        available_categories = sorted(st.session_state.original_data[category_column].dropna().unique().tolist())
-                        if available_categories:
-                            selected_categories = st.multiselect(
-                                "自動生成を実行する分類を選択してください：",
-                                options=available_categories,
-                                default=[],
-                                help="選択した分類のみABC区分を自動生成します。選択しない分類は既存の値を保持します。"
-                            )
-                            if 'selected_generation_categories' not in st.session_state:
-                                st.session_state.selected_generation_categories = []
-                            st.session_state.selected_generation_categories = selected_categories
-                        else:
-                            st.warning("分類データが見つかりません")
-                            st.session_state.selected_generation_categories = []
-                    else:
-                        st.info("分類カラムが設定されていないため、全データを対象として自動生成します")
-                        st.session_state.selected_generation_categories = []
-                else:
-                    st.info("分類カラムが設定されていないため、全データを対象として自動生成します")
-                    st.session_state.selected_generation_categories = []
-                
-                # 設定パターンの選択
-                st.markdown("### 設定パターンの選択")
-                setting_mode = st.radio(
-                    "区分設定方法",
-                    options=['ratio', 'quantity'],
-                    format_func=lambda x: '構成比率範囲' if x == 'ratio' else '数量範囲',
-                    horizontal=True,
-                    index=0 if st.session_state.abc_setting_mode == 'ratio' else 1
-                )
-                st.session_state.abc_setting_mode = setting_mode
-                
-                st.markdown("### 自動生成時の区分追加")
-                if setting_mode == 'ratio':
-                    st.markdown(ABC_EXPLANATION['category_description_ratio'])
-                else:
-                    st.markdown(ABC_EXPLANATION['category_description_quantity'])
-                
-                # 現在の区分設定を表示・編集
-                categories_df = pd.DataFrame(st.session_state.abc_categories)
-                
-                # 区分の追加
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    # 追加可能な区分を「区分」付きで表示
-                    additional_options = [''] + [f"{cat['name']}区分" for cat in ABC_CLASSIFICATION_SETTINGS['additional_categories']]
-                    new_category_display = st.selectbox(
-                        "追加する区分",
-                        options=additional_options,
-                        help=HELP_TEXTS['abc_additional_help']
-                    )
-                with col2:
-                    # プルダウンのラベル高さに合わせるため調整
-                    st.write("")  # ラベル分の高さ調整（selectboxのラベルと合わせる）
-                    if st.button("区分を追加する", type="primary", disabled=not new_category_display):
-                        # 表示名から区分名を抽出（「D区分」→「D」）
-                        new_category_name = new_category_display.replace('区分', '')
-                        
-                        # 設定パターンに応じて適切なリストを選択
-                        if setting_mode == 'ratio':
-                            existing_names = [cat['name'] for cat in st.session_state.abc_categories]
-                            target_list = st.session_state.abc_categories
-                        else:
-                            existing_names = [cat['name'] for cat in st.session_state.abc_quantity_categories]
-                            target_list = st.session_state.abc_quantity_categories
-                        
-                        if new_category_name not in existing_names:
-                            if setting_mode == 'ratio':
-                                # 構成比率パターンの場合
-                                last_end = max([cat['end_ratio'] for cat in target_list]) if target_list else 0.0
-                                new_category = {
-                                    'name': new_category_name,
-                                    'start_ratio': last_end,
-                                    'end_ratio': min(1.0, last_end + 0.1),
-                                    'description': f'{new_category_name}区分'
-                                }
-                            else:
-                                # 数量範囲パターンの場合
-                                new_category = {
-                                    'name': new_category_name,
-                                    'min_value': 1,  # デフォルトの下限値
-                                    'description': f'{new_category_name}区分'
-                                }
-                            target_list.append(new_category)
-                            st.rerun()
-                        else:
-                            st.warning(f"区分 '{new_category_display}' は既に存在します")
-                
-                # 区分設定の編集（パターンによって切り替え）
-                if setting_mode == 'ratio':
-                    # 構成比率パターンの編集
-                    st.markdown("### 各区分の構成比率範囲の設定")
-                    
-                    # CSS スタイリング
-                    st.markdown("""
-                    <style>
-                    .editable-field {
-                        background-color: #ffffff;
-                        border: 2px solid #4CAF50;
-                        border-radius: 4px;
-                        padding: 2px;
-                    }
-                    .auto-field {
-                        background-color: #f5f5f5;
-                        border: 1px solid #cccccc;
-                        border-radius: 4px;
-                        padding: 2px;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    
-                    edited_categories = []
-                    
-                    for i, category in enumerate(st.session_state.abc_categories):
-                        col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
-                        
-                        with col1:
-                            st.write("")
-                            st.markdown(f"**{category['name']}区分**")
-                        
-                        with col2:
-                            if i == 0:
-                                start_ratio = 0.0
-                                st.number_input(
-                                    f"開始%",
-                                    min_value=0.0,
-                                    max_value=100.0,
-                                    value=0.0,
-                                    step=1.0,
-                                    key=f"start_{i}",
-                                    help="A区分の開始は常に0%（自動設定）",
-                                    disabled=True
-                                )
-                            else:
-                                start_ratio = edited_categories[i-1]['end_ratio']
-                                st.number_input(
-                                    f"開始%",
-                                    min_value=0.0,
-                                    max_value=100.0,
-                                    value=start_ratio * 100,
-                                    step=1.0,
-                                    key=f"start_{i}",
-                                    help="前の区分の終了値が自動設定されます",
-                                    disabled=True
-                                )
-                        
-                        with col3:
-                            is_last_category = (i == len(st.session_state.abc_categories) - 1)
-                            
-                            if is_last_category:
-                                end_ratio = 1.0
-                                st.number_input(
-                                    f"終了%",
-                                    min_value=0.0,
-                                    max_value=100.0,
-                                    value=100.0,
-                                    step=1.0,
-                                    key=f"end_{i}",
-                                    help="最終区分の終了は常に100%（自動設定）",
-                                    disabled=True
-                                )
-                            else:
-                                end_ratio = st.number_input(
-                                    f"終了%",
-                                    min_value=(start_ratio * 100) + 1.0,
-                                    max_value=100.0,
-                                    value=category['end_ratio'] * 100,
-                                    step=1.0,
-                                    key=f"end_{i}",
-                                    help="この区分の終了構成比率（%）- 編集可能"
-                                ) / 100.0
-                        
-                        with col4:
-                            if len(st.session_state.abc_categories) > 1:
-                                st.write("")
-                                if st.button("🗑️", key=f"delete_{i}", help="この区分を削除"):
-                                    st.session_state.abc_categories.pop(i)
-                                    st.rerun()
-                            else:
-                                st.write("")
-                        
-                        edited_categories.append({
-                            'name': category['name'],
-                            'start_ratio': start_ratio,
-                            'end_ratio': end_ratio,
-                            'description': category.get('description', f'{category["name"]}区分')
-                        })
-                    
-                    # 設定の妥当性チェック
-                    is_valid, error_msg = validate_abc_categories(edited_categories)
-                    if not is_valid:
-                        st.error(f"❌ 区分設定エラー: {error_msg}")
-                    else:
-                        st.session_state.abc_categories = edited_categories
-                        st.success("✅ 区分設定が有効です")
-                    
-                    # デフォルトに戻すボタン
-                    if st.button("デフォルト設定に戻す"):
-                        st.session_state.abc_categories = ABC_CLASSIFICATION_SETTINGS['default_categories'].copy()
-                        st.rerun()
-                
-                else:
-                    # 数量範囲パターンの編集
-                    st.markdown("### 各区分の数量範囲の設定")
-                    st.info("各区分の下限値（月平均実績値）を設定してください。最終区分（C区分）の下限値は自動的に0になります。\n\n💡 「データに基づくデフォルト値計算」ボタンを使用すると、構成比率範囲のデフォルト設定と同等の区分けができるように自動計算されます。")
-                    
-                    edited_quantity_categories = []
-                    
-                    for i, category in enumerate(st.session_state.abc_quantity_categories):
-                        col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
-                        
-                        with col1:
-                            st.write("")
-                            st.markdown(f"**{category['name']}区分**")
-                        
-                        with col2:
-                            st.write("")
-                            st.markdown("上限：――")
-                        
-                        with col3:
-                            is_last_category = (i == len(st.session_state.abc_quantity_categories) - 1)
-                            
-                            if is_last_category:
-                                min_value = 0
-                                st.number_input(
-                                    f"下限値",
-                                    min_value=0,
-                                    max_value=999999999,
-                                    value=0,
-                                    step=1,
-                                    key=f"qty_min_{i}",
-                                    help="最終区分の下限は常に0（自動設定）",
-                                    disabled=True
-                                )
-                            else:
-                                min_value = st.number_input(
-                                    f"下限値",
-                                    min_value=0,
-                                    max_value=999999999,
-                                    value=category.get('min_value', 0),
-                                    step=1,
-                                    key=f"qty_min_{i}",
-                                    help=f"{category['name']}区分の下限値（この値以上）"
-                                )
-                        
-                        with col4:
-                            if len(st.session_state.abc_quantity_categories) > 1:
-                                st.write("")
-                                if st.button("🗑️", key=f"qty_delete_{i}", help="この区分を削除"):
-                                    st.session_state.abc_quantity_categories.pop(i)
-                                    st.rerun()
-                            else:
-                                st.write("")
-                        
-                        edited_quantity_categories.append({
-                            'name': category['name'],
-                            'min_value': min_value,
-                            'description': category.get('description', f'{category["name"]}区分')
-                        })
-                    
-                    # 設定の妥当性チェック
-                    is_valid, error_msg = validate_abc_quantity_categories(edited_quantity_categories)
-                    if not is_valid:
-                        st.error(f"❌ 区分設定エラー: {error_msg}")
-                    else:
-                        st.session_state.abc_quantity_categories = edited_quantity_categories
-                        st.success("✅ 区分設定が有効です")
-                    
-                    # ボタン行
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        if st.button("データに基づくデフォルト値計算", key="calc_default_quantity"):
-                            if st.session_state.original_data is not None:
-                                # 現在のマッピングからActualカラムを取得
-                                actual_column = mapping.get('Actual', '')
-                                if actual_column and actual_column in st.session_state.original_data.columns:
-                                    # マッピング済みデータを作成
-                                    temp_df = apply_mapping(st.session_state.original_data, mapping)
-                                    # デフォルト値を計算
-                                    default_categories = calculate_default_quantity_ranges(temp_df, 'Actual')
-                                    st.session_state.abc_quantity_categories = default_categories
-                                    st.success("✅ データに基づくデフォルト値を計算しました")
-                                    st.rerun()
-                                else:
-                                    st.error("❌ 実績値カラムが設定されていません")
-                            else:
-                                st.error("❌ データが読み込まれていません")
-                    
-                    with col_btn2:
-                        if st.button("固定デフォルト設定に戻す", key="reset_quantity"):
-                            st.session_state.abc_quantity_categories = [
-                                {'name': 'A', 'min_value': 1000},
-                                {'name': 'B', 'min_value': 100},
-                                {'name': 'C', 'min_value': 0}
-                            ]
-                            st.rerun()
+        # 任意項目の説明を追加
+        st.markdown("", unsafe_allow_html=True)
+        st.info("💡 **任意項目について**: 分類フィルターや詳細分析を行う場合は「分類」の設定を推奨します。")
         
-        # マッピング確認・保存（2つのボタンに分離）
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📋 マッピング設定を適用する", type="primary", use_container_width=True):
-                # 必須項目チェック（ABC区分は除く - 自動生成するため）
-                required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
-                missing_fields = [field for field in required_fields if not mapping[field]]
-                
-                if missing_fields:
-                    st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
-                else:
-                    try:
-                        # データ変換（ABC区分は既存値のみ使用）
-                        mapped_df = apply_mapping(df, mapping)
-                        
-                        # 基本検証
-                        if validate_mapped_data(mapped_df):
-                            # 月別合計値補正の実行
-                            if st.session_state.monthly_correction_enabled:
-                                with st.status("🔄 月別合計値補正を実行中...", expanded=True) as status:
-                                    st.write("📊 分類ごとの月別合計値を分析中...")
-                                    
-                                    try:
-                                        mapped_df = apply_monthly_correction(mapped_df)
-                                        st.write("✅ 月別合計値補正完了")
-                                        status.update(label="✅ 月別合計値補正完了", state="complete")
-                                    except Exception as e:
-                                        st.error(f"❌ 月別合計値補正エラー: {str(e)}")
-                                        status.update(label="❌ 月別合計値補正エラー", state="error")
-                                        return
-                            
-                            st.session_state.data = mapped_df
-                            st.session_state.mapping = mapping
-                            st.session_state.mapping_completed = True
-                            st.success("✅ データマッピング完了！")
-                            
-                            # ABC区分がない場合の案内
-                            if 'Class_abc' not in mapped_df.columns or mapped_df['Class_abc'].isna().all():
-                                st.info("💡 ABC区分を自動生成する場合は、右側の「ABC区分を自動生成する」ボタンをお使いください。")
-                            
-                            st.rerun()
-                        else:
-                            st.error("❌ データ検証でエラーが発生しました")
-                            
-                    except Exception as e:
-                        st.error(f"❌ データ処理エラー: {str(e)}")
-        
-        with col2:
-            # ABC区分自動生成ボタン（別処理として分離）
-            abc_button_disabled = not st.session_state.get('mapping_completed', False)
-            if st.button("🔄 ABC区分を自動生成する", 
-                        type="secondary", 
-                        use_container_width=True,
-                        disabled=abc_button_disabled,
-                        help="先にマッピング設定を適用してください" if abc_button_disabled else "選択した分類のABC区分を自動生成します"):
-                
-                if st.session_state.get('data') is None:
-                    st.error("❌ 先にマッピング設定を適用してください")
-                    return
-                
-                # 現在のデータを取得
-                mapped_df = st.session_state.data.copy()
-                
-                # ABC区分の自動生成処理
-                has_selected_categories = bool(st.session_state.selected_generation_categories)
-                
-                # ABC区分生成処理を実行
-                # 【パターン②】部分上書き または 【パターン③】全体自動生成
-                with st.status("🔄 ABC区分を自動生成中...", expanded=True) as status:
-                    st.write("📊 実績値データを分析中...")
-                    
-                    # 区分設定の妥当性チェック
-                    if st.session_state.abc_setting_mode == 'ratio':
-                        is_valid, error_msg = validate_abc_categories(st.session_state.abc_categories)
-                        current_categories = st.session_state.abc_categories
-                    else:
-                        is_valid, error_msg = validate_abc_quantity_categories(st.session_state.abc_quantity_categories)
-                        current_categories = st.session_state.abc_quantity_categories
-                    
-                    if not is_valid:
-                        st.error(f"❌ ABC区分設定エラー: {error_msg}")
-                        status.update(label="❌ ABC区分設定エラー", state="error")
-                        return
-                    
-                    st.write("🔢 商品コード別実績値を集計中...")
-                    
-                    # パターン判定と処理
-                    target_categories = st.session_state.selected_generation_categories if has_selected_categories else None
-                    preserve_existing = True  # 既存ABC区分を常に保持
-                    
-                    try:
-                        if st.session_state.abc_setting_mode == 'ratio':
-                            mapped_df = calculate_abc_classification(
-                                mapped_df, 
-                                categories=current_categories,
-                                base_column='Actual',
-                                target_categories=target_categories,
-                                preserve_existing=preserve_existing
-                            )
-                        else:
-                            mapped_df = calculate_abc_classification_by_quantity(
-                                mapped_df, 
-                                categories=current_categories,
-                                base_column='Actual',
-                                target_categories=target_categories,
-                                preserve_existing=preserve_existing
-                            )
-                        st.write("✅ ABC区分の割り当て完了")
-                        
-                        # 処理モードの表示
-                        if target_categories:
-                            st.info(f"📝 選択した分類（{', '.join(target_categories)}）のABC区分を自動生成しました")
-                        else:
-                            st.info("📝 全データのABC区分を自動生成しました")
-                        
-                        # 生成結果の表示
-                        abc_summary = get_abc_classification_summary(mapped_df, 'Class_abc', 'Actual')
-                        if abc_summary:
-                            st.write("📈 集計結果:")
-                            
-                            # 各区分の詳細情報
-                            if st.session_state.abc_setting_mode == 'ratio':
-                                for category in sorted(current_categories, key=lambda x: x['start_ratio']):
-                                    cat_name = category['name']
-                                    count = abc_summary['counts'].get(cat_name, 0)
-                                    ratio = abc_summary['ratios'].get(cat_name, 0)
-                                    range_text = f"{category['start_ratio']*100:.0f}%-{category['end_ratio']*100:.0f}%"
-                                    st.write(f"　• {cat_name}区分({range_text}): {count}件 ({ratio:.1f}%)")
-                            else:
-                                for category in sorted(current_categories, key=lambda x: x.get('min_value', 0), reverse=True):
-                                    cat_name = category['name']
-                                    count = abc_summary['counts'].get(cat_name, 0)
-                                    ratio = abc_summary['ratios'].get(cat_name, 0)
-                                    min_val = category.get('min_value', 0)
-                                    st.write(f"　• {cat_name}区分({min_val}以上): {count}件 ({ratio:.1f}%)")
-                            
-                            # 未区分がある場合の警告
-                            if '未区分' in abc_summary['counts']:
-                                unclassified_count = abc_summary['counts']['未区分']
-                                st.warning(f"⚠️ 未区分の商品が{unclassified_count}件あります。必要に応じて追加で自動生成を実行してください。")
-                            
-                            status.update(label="✅ ABC区分自動生成完了", state="complete")
-                        else:
-                            st.warning("⚠️ ABC区分の集計に問題があります")
-                            
-                        # セッション状態を更新
-                        st.session_state.data = mapped_df
-                        st.rerun()
-                        
-                    except Exception as e:
-                        st.error(f"❌ ABC区分計算エラー: {str(e)}")
-                        status.update(label="❌ ABC区分計算エラー", state="error")
-                        return
-        
-        # マッピング完了後の表示
-        if st.session_state.mapping_completed and st.session_state.data is not None:
-            # マッピング結果表示
-            st.subheader("4. マッピング結果")
-            
-            # 日本語名のマッピング
-            mapping_data = []
-            for k, v in st.session_state.current_mapping.items():
-                if v:  # 空でない場合のみ
-                    japanese_name = COLUMN_MAPPING.get(k, k)
-                    system_item_display = f"{japanese_name} ({k})"
-                    data_type = str(st.session_state.data[k].dtype) if k in st.session_state.data.columns else "未設定"
-                    mapping_data.append({
-                        "システム項目": system_item_display,
-                        "CSVのカラム名": v,
-                        "データ型": data_type
-                    })
-            
-            mapping_df = pd.DataFrame(mapping_data)
-            # インデックスを1始まりに変更
-            mapping_df.index = range(1, len(mapping_df) + 1)
-            st.dataframe(mapping_df, use_container_width=True)
-            
-            # 変換後データプレビュー
-            st.subheader("5. 変換後データプレビュー（上位5件表示）")
-            
-            # カラム名を日本語に変更したデータフレームを作成
-            preview_data = st.session_state.data.head(5).copy()
-            
-            # カラム名を日本語に変更
-            japanese_column_mapping = {}
-            for col in preview_data.columns:
-                if col in COLUMN_MAPPING:
-                    japanese_column_mapping[col] = COLUMN_MAPPING[col]
-                else:
-                    japanese_column_mapping[col] = col
-            
-            preview_data = preview_data.rename(columns=japanese_column_mapping)
-            
-            # ABC区分を商品コードの直後に配置
-            if 'ABC区分' in preview_data.columns and '商品コード' in preview_data.columns:
-                # カラムの順序を調整
-                cols = list(preview_data.columns)
-                # ABC区分を削除
-                cols.remove('ABC区分')
-                # 商品コードの位置を取得
-                product_code_idx = cols.index('商品コード')
-                # 商品コードの直後にABC区分を挿入
-                cols.insert(product_code_idx + 1, 'ABC区分')
-                preview_data = preview_data[cols]
-            
-            # インデックスを1始まりに変更
-            preview_data.index = range(1, len(preview_data) + 1)
-            st.dataframe(preview_data, use_container_width=True)
-            
-            # ABC区分の集計結果表示
-            if 'Class_abc' in st.session_state.data.columns:
-                st.subheader("6. ABC区分集計結果")
-                
-                # 分類フィルターの追加
-                if 'category_code' in st.session_state.data.columns and st.session_state.data['category_code'].notna().any():
-                    categories = ['全分類'] + sorted(st.session_state.data['category_code'].dropna().unique().tolist())
-                    selected_category = st.selectbox(
-                        "分類：",
-                        options=categories,
-                        key="abc_category_filter"
-                    )
-                    
-                    # フィルター適用
-                    if selected_category == '全分類':
-                        filtered_abc_data = st.session_state.data
-                        category_display = ""
-                    else:
-                        filtered_abc_data = st.session_state.data[st.session_state.data['category_code'] == selected_category]
-                        category_display = f"分類：{selected_category}"
-                else:
-                    filtered_abc_data = st.session_state.data
-                    category_display = ""
-                
-                abc_summary = get_abc_classification_summary(filtered_abc_data, 'Class_abc', 'Actual')
-                
-                if abc_summary:
-                    # 2カラムレイアウト：左側に統合表、右側に読み込み済みデータ情報
-                    col_left, col_right = st.columns([2, 1])
-                    
-                    with col_left:
-                        # 統合表の作成（実績合計を追加）
-                        abc_result_data = []
-                        total_count = 0
-                        total_actual = 0
-                        
-                        # 区分順に並べるため、A,B,C,D,...の順でソート
-                        sorted_categories = sorted(abc_summary['counts'].keys())
-                        
-                        for category in sorted_categories:
-                            count = abc_summary['counts'].get(category, 0)
-                            ratio = abc_summary['ratios'].get(category, 0)
-                            actual_sum = abc_summary['actual_sums'].get(category, 0)
-                            
-                            abc_result_data.append({
-                                'ABC区分': f"{category}区分",
-                                '件数': count,
-                                '実績合計': int(actual_sum),
-                                '構成比率（%）': f"{ratio:.2f}%"
-                            })
-                            total_count += count
-                            total_actual += actual_sum
-                        
-                        # 構成比率の合計を100.00%に調整
-                        if abc_result_data and total_actual > 0:
-                            current_total_ratio = sum(abc_summary['ratios'].values())
-                            if abs(current_total_ratio - 100.0) > 0.01:  # 誤差がある場合のみ調整
-                                # 最大の区分に差分を加算
-                                max_category = max(sorted_categories, key=lambda x: abc_summary['ratios'][x])
-                                adjustment = 100.0 - current_total_ratio
-                                for item in abc_result_data:
-                                    if item['ABC区分'] == f"{max_category}区分":
-                                        current_ratio = float(item['構成比率（%）'].replace('%', ''))
-                                        adjusted_ratio = current_ratio + adjustment
-                                        item['構成比率（%）'] = f"{adjusted_ratio:.2f}%"
-                                        break
-                        
-                        # 合計行を追加
-                        abc_result_data.append({
-                            'ABC区分': '合計',
-                            '件数': total_count,
-                            '実績合計': int(total_actual),
-                            '構成比率（%）': "100.00%"
-                        })
-                        
-                        # データフレーム作成（インデックスなし）
-                        result_df = pd.DataFrame(abc_result_data)
-                        st.dataframe(result_df, use_container_width=True, hide_index=True)
-                    
-                    with col_right:
-                        # 読み込み済みデータ情報を右側に配置
-                        if filtered_abc_data is not None:
-                            df = filtered_abc_data
-                            
-                            # 期間の年月フォーマット変換
-                            def format_date(date_val):
-                                date_str = str(date_val)
-                                if len(date_str) == 6:  # YYYYMM形式
-                                    year = date_str[:4]
-                                    month = date_str[4:6]
-                                    return f"{year}年{month}月"
-                                return date_str
-                            
-                            min_date = format_date(df['Date'].min())
-                            max_date = format_date(df['Date'].max())
-                            
-                            st.markdown("**📊 読み込み済みデータ情報**")
-                            st.markdown(f"**期間範囲：** {min_date} - {max_date}")
-                            st.markdown(f"**データ件数：** {len(df):,} 件")
-                            st.markdown(f"**商品コード数：** {df['P_code'].nunique():,} 件")
-            
-            # 年月別集計結果の追加
-            if 'Date' in st.session_state.data.columns:
-                st.subheader("7. 年月別集計結果")
-                
-                # 分類フィルターの追加
-                if 'category_code' in st.session_state.data.columns and st.session_state.data['category_code'].notna().any():
-                    categories = ['全分類'] + sorted(st.session_state.data['category_code'].dropna().unique().tolist())
-                    selected_category_monthly = st.selectbox(
-                        "分類：",
-                        options=categories,
-                        key="monthly_category_filter"
-                    )
-                    
-                    # フィルター適用
-                    if selected_category_monthly == '全分類':
-                        filtered_monthly_data = st.session_state.data
-                        category_display_monthly = ""
-                    else:
-                        filtered_monthly_data = st.session_state.data[st.session_state.data['category_code'] == selected_category_monthly]
-                        category_display_monthly = f"分類：{selected_category_monthly}"
-                else:
-                    filtered_monthly_data = st.session_state.data
-                    category_display_monthly = ""
-                
-                monthly_summary_df = create_monthly_summary_table(filtered_monthly_data)
-                if not monthly_summary_df.empty:
-                    st.dataframe(monthly_summary_df, use_container_width=True, hide_index=True)
-                    st.markdown("**※ 月別合計値補正を実施した場合は、AI予測および計画値の月別合計が一致しているかをご確認ください。**")
-                else:
-                    st.info("年月別集計データがありません")
+        # ABC区分の選択（任意項目に移動）
+        mapping['Class_abc'] = st.selectbox(
+            "ABC区分（Class_abc）",
+            options=[''] + st.session_state.data_columns,
+            index=get_selectbox_index(st.session_state.data_columns, st.session_state.current_mapping.get('Class_abc', '')),
+            help=HELP_TEXTS['abc_class_help']
+        )
     
-    # 既存の読み込み済みデータ情報表示を削除（統合したため）
+    # 項目名変更機能の追加
+    st.markdown("---")
+    with st.expander("📝 項目名カスタマイズ（任意）"):
+        st.markdown("「計画01」「計画02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。")
+        
+        col_custom1, col_custom2, col_custom3 = st.columns(3)
+        
+        with col_custom1:
+            st.session_state.custom_column_names['Plan_01'] = st.text_input(
+                "計画01の表示名",
+                value=st.session_state.custom_column_names['Plan_01'],
+                max_chars=20
+            )
+        
+        with col_custom2:
+            st.session_state.custom_column_names['Plan_02'] = st.text_input(
+                "計画02の表示名",
+                value=st.session_state.custom_column_names['Plan_02'],
+                max_chars=20
+            )
+        
+        with col_custom3:
+            st.session_state.custom_column_names['AI_pred'] = st.text_input(
+                "AI予測値の表示名",
+                value=st.session_state.custom_column_names['AI_pred'],
+                max_chars=20
+            )
+    
+    # 現在のマッピング状態を更新
+    st.session_state.current_mapping = mapping
+    
+    # マッピング実行ボタン
+    if st.button("マッピング設定を適用する", type="primary", use_container_width=True):
+        # 必須項目のチェック
+        required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
+        missing_fields = [field for field in required_fields if not mapping.get(field)]
+        
+        if missing_fields:
+            st.error(f"❌ 必須項目が未設定です: {', '.join(missing_fields)}")
+        else:
+            try:
+                # データマッピング実行
+                with st.status("🔄 データマッピング実行中...", expanded=True) as status:
+                    st.write("📊 カラム名を変換中...")
+                    
+                    mapped_df = apply_mapping(st.session_state.original_data, mapping)
+                    
+                    # データ検証
+                    st.write("🔍 データを検証中...")
+                    validation_result = validate_mapped_data(mapped_df)
+                    
+                    if validation_result:
+                        st.session_state.data = mapped_df
+                        st.session_state.mapping = mapping
+                        st.session_state.mapping_completed = True
+                        st.write("✅ データマッピング完了")
+                        status.update(label="✅ データマッピング完了", state="complete")
+                        st.rerun()
+                    else:
+                        st.error("❌ データ検証でエラーが発生しました")
+                        status.update(label="❌ データ検証エラー", state="error")
+                        
+            except Exception as e:
+                st.error(f"❌ マッピング処理エラー: {str(e)}")
+    
+    # マッピング結果の表示
+    if st.session_state.mapping_completed:
+        st.markdown('<div class="result-section">', unsafe_allow_html=True)
+        st.success("✅ マッピングを実施しました。下記に変換後のデータプレビューを表示します。")
+        
+        # 分類データの設定状況を表示
+        if 'category_code' in st.session_state.data.columns:
+            category_count = len(st.session_state.data['category_code'].dropna().unique())
+            st.info(f"✅ 分類データが設定されています（{category_count}種類）。年月別データ集計で分類フィルターが利用可能です。")
+        else:
+            st.warning("⚠️ 分類データが設定されていません。年月別データ集計では全データでの集計のみ可能です。")
+        
+        # 変換後データプレビュー
+        st.markdown('<div class="section-subtitle">変換後データプレビュー（上位5件）</div>', unsafe_allow_html=True)
+        preview_df = st.session_state.data.head(5).copy()
+        preview_df.index = range(1, len(preview_df) + 1)
+        
+        # カスタム項目名を反映
+        display_names = get_display_column_names()
+        preview_df_display = preview_df.copy()
+        for col in preview_df_display.columns:
+            if col in display_names:
+                preview_df_display = preview_df_display.rename(columns={col: display_names[col]})
+        
+        st.dataframe(preview_df_display, use_container_width=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def show_step3():
+    """STEP 3: 月別合計値補正"""
+    st.markdown('<div class="step-title">月別合計値補正</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">分類ごとの月別合計値を計画値01に合わせて調整します。AI予測および計画値02（存在する場合）が対象です。</div>', unsafe_allow_html=True)
+    
+    # 月別合計値補正の選択
+    st.session_state.monthly_correction_enabled = st.checkbox(
+        "月別合計値補正を実行する（全分類対象）",
+        value=st.session_state.monthly_correction_enabled
+    )
+    
+    if st.session_state.monthly_correction_enabled and not st.session_state.monthly_correction_completed:
+        # 補正実行
+        try:
+            with st.status("🔄 月別合計値補正を実行中...", expanded=True) as status:
+                st.write("📊 分類ごとの月別合計値を分析中...")
+                
+                corrected_df = apply_monthly_correction(st.session_state.data)
+                st.session_state.data = corrected_df
+                st.session_state.monthly_correction_completed = True
+                
+                st.write("✅ 月別合計値補正完了")
+                status.update(label="✅ 月別合計値補正完了", state="complete")
+                st.rerun()
+                
+        except Exception as e:
+            st.error(f"❌ 月別合計値補正エラー: {str(e)}")
+    
+    # 結果表示
+    if st.session_state.monthly_correction_completed:
+        st.markdown('<div class="result-section">', unsafe_allow_html=True)
+        st.success("✅ 年月別データ集計結果：月別合計値補正を実施した場合は、AI予測および計画値の月別合計が一致しているかをご確認ください。")
+        
+        # 分類フィルター（エラー防止強化版）
+        selected_category = '全て'  # デフォルト値
+        
+        try:
+            # 分類データの存在確認と安全な処理
+            has_category_data = False
+            category_options = ['全て']
+            
+            if 'category_code' in st.session_state.data.columns:
+                # 分類データの取得（null値を除外し、文字列として処理）
+                category_values = st.session_state.data['category_code'].dropna()
+                if not category_values.empty:
+                    # 文字列変換して重複を除去
+                    unique_categories = sorted(list(set(category_values.astype(str))))
+                    if unique_categories:
+                        category_options.extend(unique_categories)
+                        has_category_data = True
+            
+            # 分類フィルターの表示
+            if has_category_data:
+                selected_category = st.selectbox(
+                    "分類フィルター", 
+                    category_options,
+                    key="monthly_summary_filter",
+                    help="分類ごとの月別合計値を確認できます"
+                )
+            else:
+                st.info("💡 分類データがマッピングされていないため、全データを表示します。")
+        
+        except Exception as e:
+            st.warning(f"⚠️ 分類フィルター処理中にエラーが発生しました: {str(e)}")
+            st.info("全データを表示します。")
+        
+        # 月別集計表の表示（フィルター適用）
+        try:
+            # 分類フィルターが適用された場合の処理
+            if selected_category != '全て' and 'category_code' in st.session_state.data.columns:
+                # 選択された分類でフィルタリング
+                filtered_data = st.session_state.data[
+                    st.session_state.data['category_code'].astype(str) == selected_category
+                ]
+                if not filtered_data.empty:
+                    monthly_summary = create_monthly_summary_table(filtered_data)
+                else:
+                    st.warning(f"⚠️ 選択された分類「{selected_category}」にデータが見つかりません。")
+                    monthly_summary = create_monthly_summary_table(st.session_state.data)
+            else:
+                # 全データまたは分類フィルターなしの場合
+                monthly_summary = create_monthly_summary_table(st.session_state.data)
+            
+            # テーブル表示
+            if not monthly_summary.empty:
+                st.dataframe(monthly_summary, use_container_width=True, hide_index=True)
+            else:
+                st.warning("⚠️ 表示するデータがありません。")
+                
+        except Exception as e:
+            st.error(f"❌ 月別集計表作成エラー: {str(e)}")
+            st.info("データの内容を確認してください。")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def show_step4():
+    """STEP 4: ABC区分自動生成"""
+    st.markdown('<div class="step-title">ABC区分自動生成</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">ABC区分を自動生成するか、既存を使用するかを選択してください。※一部分類のみを対象とした自動生成も可能です。</div>', unsafe_allow_html=True)
+    
+    # ABC区分生成の選択肢（排他制御に変更）
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        execute_abc_generation = st.checkbox("☑ ABC区分を自動生成する（分類単位）")
+    
+    with col2:
+        use_existing_abc = st.checkbox("☐ 既存のABC区分を使用する（全分類）", disabled=execute_abc_generation)
+    
+    # 排他制御: 一方が選択されたら他方を無効化
+    if execute_abc_generation and use_existing_abc:
+        st.session_state.use_existing_abc = False
+        use_existing_abc = False
+        st.rerun()
+    
+    if execute_abc_generation:
+        # 区分設定方式の選択
+        st.markdown('<div class="section-subtitle">設定方法</div>', unsafe_allow_html=True)
+        abc_method_col1, abc_method_col2 = st.columns(2)
+        
+        with abc_method_col1:
+            if st.radio("区分設定方式", ["構成比率範囲", "数量範囲"], horizontal=True) == "構成比率範囲":
+                st.session_state.abc_setting_mode = 'ratio'
+            else:
+                st.session_state.abc_setting_mode = 'quantity'
+        
+        # 対象分類の選択
+        if 'category_code' in st.session_state.data.columns:
+            st.markdown('<div class="section-subtitle">対象分類選択</div>', unsafe_allow_html=True)
+            available_categories = sorted(st.session_state.data['category_code'].dropna().unique().tolist())
+            st.session_state.selected_generation_categories = st.multiselect(
+                "「分類」フィルター（※複数選択可）",
+                available_categories,
+                default=st.session_state.selected_generation_categories
+            )
+        
+        # ABC区分設定の詳細設定
+        show_abc_settings()
+        
+        # 実行ボタン
+        if st.button("ABC区分自動生成を実行する", type="primary", use_container_width=True):
+            execute_abc_generation_process()
+    
+    elif use_existing_abc:
+        st.info("💡 既存のABC区分をそのまま使用して集計結果を表示します。")
+        if st.button("既存区分で集計のみ行う", type="secondary", use_container_width=True):
+            st.session_state.abc_generation_completed = True
+    
+    # 結果表示
+    if st.session_state.abc_generation_completed:
+        st.markdown('<div class="result-section">', unsafe_allow_html=True)
+        st.success("✅ ABC区分集計結果")
+        
+        # ABC区分集計結果の表示
+        show_abc_generation_results()
+        
+        st.markdown('<div class="step-annotation">分類単位で複数回実行可能です。必要に応じて、分類フィルターから対象を選択して再実行してください。</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 def get_selectbox_index(options, value):
     """selectboxのindex値を取得"""
@@ -850,14 +521,43 @@ def get_selectbox_index(options, value):
         return 0
 
 def apply_mapping(df, mapping):
-    """データフレームにマッピングを適用"""
+    """データフレームにマッピングを適用（カスタム項目名対応）"""
     mapped_df = pd.DataFrame()
     
     for system_field, csv_column in mapping.items():
         if csv_column and csv_column in df.columns:
             mapped_df[system_field] = df[csv_column]
     
+    # ABC区分が未選択の場合は「未区分」で補完
+    if 'Class_abc' not in mapped_df.columns or mapped_df['Class_abc'].isna().all():
+        mapped_df['Class_abc'] = '未区分'
+    
+    # 分類データの安全な処理
+    if 'category_code' in mapped_df.columns:
+        # null値や空文字を適切に処理
+        mapped_df['category_code'] = mapped_df['category_code'].fillna('未分類')
+        # 文字列型に統一
+        mapped_df['category_code'] = mapped_df['category_code'].astype(str)
+        # 空文字列を「未分類」に置換
+        mapped_df['category_code'] = mapped_df['category_code'].replace('', '未分類')
+    
     return mapped_df
+
+def get_display_column_names():
+    """表示用のカラム名を取得"""
+    display_names = COLUMN_MAPPING.copy()
+    
+    # カスタム項目名を反映
+    if 'custom_column_names' in st.session_state:
+        for key, custom_name in st.session_state.custom_column_names.items():
+            if custom_name.strip():  # 空でない場合のみ
+                # 9文字以内に省略
+                if len(custom_name) > 9:
+                    display_names[key] = custom_name[:8] + '…'
+                else:
+                    display_names[key] = custom_name
+    
+    return display_names
 
 def read_csv_with_encoding(uploaded_file):
     """複数のエンコーディングを試してCSVファイルを読み込み"""
@@ -1231,4 +931,242 @@ def create_monthly_summary_table(df):
         
     except Exception as e:
         st.error(f"年月別集計テーブル作成エラー: {str(e)}")
-        return pd.DataFrame() 
+        return pd.DataFrame()
+
+def show_abc_settings():
+    """ABC区分設定の詳細設定画面を表示"""
+    if st.session_state.abc_setting_mode == 'ratio':
+        show_ratio_settings()
+    else:
+        show_quantity_settings()
+
+def show_ratio_settings():
+    """構成比率範囲設定画面"""
+    st.markdown("**構成比率範囲設定**")
+    st.info(ABC_EXPLANATION['category_description_ratio'])
+    
+    # 区分の追加
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        additional_options = [''] + [f"{cat['name']}区分" for cat in ABC_CLASSIFICATION_SETTINGS['additional_categories']]
+        new_category_display = st.selectbox("追加する区分", options=additional_options)
+    with col2:
+        if st.button("区分を追加する", disabled=not new_category_display):
+            add_abc_category(new_category_display.replace('区分', ''), 'ratio')
+    
+    # 区分設定の編集
+    edited_categories = []
+    for i, category in enumerate(st.session_state.abc_categories):
+        col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
+        
+        with col1:
+            st.markdown(f"**{category['name']}区分**")
+        
+        with col2:
+            start_ratio = 0.0 if i == 0 else edited_categories[i-1]['end_ratio']
+            st.number_input(f"開始%", value=start_ratio * 100, disabled=True, key=f"start_{i}")
+        
+        with col3:
+            is_last = (i == len(st.session_state.abc_categories) - 1)
+            if is_last:
+                end_ratio = 1.0
+                st.number_input(f"終了%", value=100.0, disabled=True, key=f"end_{i}")
+            else:
+                end_ratio = st.number_input(
+                    f"終了%",
+                    min_value=(start_ratio * 100) + 1.0,
+                    max_value=100.0,
+                    value=category['end_ratio'] * 100,
+                    key=f"end_{i}"
+                ) / 100.0
+        
+        with col4:
+            if len(st.session_state.abc_categories) > 1 and st.button("🗑️", key=f"delete_{i}"):
+                st.session_state.abc_categories.pop(i)
+                st.rerun()
+        
+        edited_categories.append({
+            'name': category['name'],
+            'start_ratio': start_ratio,
+            'end_ratio': end_ratio,
+            'description': category.get('description', f'{category["name"]}区分')
+        })
+    
+    st.session_state.abc_categories = edited_categories
+
+def show_quantity_settings():
+    """数量範囲設定画面"""
+    st.markdown("**数量範囲設定**")
+    st.info(ABC_EXPLANATION['category_description_quantity'])
+    
+    # 区分の追加
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        additional_options = [''] + [f"{cat['name']}区分" for cat in ABC_CLASSIFICATION_SETTINGS['additional_categories']]
+        new_category_display = st.selectbox("追加する区分", options=additional_options, key="qty_add")
+    with col2:
+        if st.button("区分を追加する", disabled=not new_category_display, key="add_qty_btn"):
+            add_abc_category(new_category_display.replace('区分', ''), 'quantity')
+    
+    # 区分設定の編集
+    edited_categories = []
+    for i, category in enumerate(st.session_state.abc_quantity_categories):
+        col1, col2, col3, col4 = st.columns([1, 2, 2, 1])
+        
+        with col1:
+            st.markdown(f"**{category['name']}区分**")
+        
+        with col2:
+            st.markdown("上限：――")
+        
+        with col3:
+            is_last = (i == len(st.session_state.abc_quantity_categories) - 1)
+            if is_last:
+                min_value = 0
+                st.number_input("下限値", value=0, disabled=True, key=f"qty_min_{i}")
+            else:
+                min_value = st.number_input(
+                    "下限値",
+                    min_value=0,
+                    value=category.get('min_value', 0),
+                    key=f"qty_min_{i}"
+                )
+        
+        with col4:
+            if len(st.session_state.abc_quantity_categories) > 1 and st.button("🗑️", key=f"qty_delete_{i}"):
+                st.session_state.abc_quantity_categories.pop(i)
+                st.rerun()
+        
+        edited_categories.append({
+            'name': category['name'],
+            'min_value': min_value,
+            'description': category.get('description', f'{category["name"]}区分')
+        })
+    
+    st.session_state.abc_quantity_categories = edited_categories
+
+def add_abc_category(category_name, mode):
+    """ABC区分の追加"""
+    if mode == 'ratio':
+        existing_names = [cat['name'] for cat in st.session_state.abc_categories]
+        if category_name not in existing_names:
+            last_end = max([cat['end_ratio'] for cat in st.session_state.abc_categories]) if st.session_state.abc_categories else 0.0
+            new_category = {
+                'name': category_name,
+                'start_ratio': last_end,
+                'end_ratio': min(1.0, last_end + 0.1),
+                'description': f'{category_name}区分'
+            }
+            st.session_state.abc_categories.append(new_category)
+            st.rerun()
+    else:
+        existing_names = [cat['name'] for cat in st.session_state.abc_quantity_categories]
+        if category_name not in existing_names:
+            new_category = {
+                'name': category_name,
+                'min_value': 1,
+                'description': f'{category_name}区分'
+            }
+            st.session_state.abc_quantity_categories.append(new_category)
+            st.rerun()
+
+def execute_abc_generation_process():
+    """ABC区分自動生成処理の実行"""
+    try:
+        with st.status("🔄 ABC区分を自動生成中...", expanded=True) as status:
+            st.write("📊 実績値データを分析中...")
+            
+            # 区分設定の妥当性チェック
+            if st.session_state.abc_setting_mode == 'ratio':
+                is_valid, error_msg = validate_abc_categories(st.session_state.abc_categories)
+                current_categories = st.session_state.abc_categories
+            else:
+                is_valid, error_msg = validate_abc_quantity_categories(st.session_state.abc_quantity_categories)
+                current_categories = st.session_state.abc_quantity_categories
+            
+            if not is_valid:
+                st.error(f"❌ ABC区分設定エラー: {error_msg}")
+                status.update(label="❌ ABC区分設定エラー", state="error")
+                return
+            
+            st.write("🔢 商品コード別実績値を集計中...")
+            
+            # 処理対象の決定
+            target_categories = st.session_state.selected_generation_categories if st.session_state.selected_generation_categories else None
+            preserve_existing = True
+            
+            # ABC区分の計算
+            mapped_df = st.session_state.data.copy()
+            
+            if st.session_state.abc_setting_mode == 'ratio':
+                mapped_df = calculate_abc_classification(
+                    mapped_df,
+                    categories=current_categories,
+                    base_column='Actual',
+                    target_categories=target_categories,
+                    preserve_existing=preserve_existing
+                )
+            else:
+                mapped_df = calculate_abc_classification_by_quantity(
+                    mapped_df,
+                    categories=current_categories,
+                    base_column='Actual',
+                    target_categories=target_categories,
+                    preserve_existing=preserve_existing
+                )
+            
+            st.session_state.data = mapped_df
+            st.session_state.abc_generation_completed = True
+            
+            st.write("✅ ABC区分の割り当て完了")
+            status.update(label="✅ ABC区分自動生成完了", state="complete")
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"❌ ABC区分計算エラー: {str(e)}")
+
+def show_abc_generation_results():
+    """ABC区分生成結果の表示"""
+    abc_summary = get_abc_classification_summary(st.session_state.data, 'Class_abc', 'Actual')
+    
+    if abc_summary:
+        # 分類フィルター
+        if 'category_code' in st.session_state.data.columns:
+            categories = ['全て'] + sorted(st.session_state.data['category_code'].dropna().unique().tolist())
+            selected_category = st.selectbox("分類フィルター", categories, key="abc_filter")
+            
+            if selected_category != '全て':
+                filtered_data = st.session_state.data[st.session_state.data['category_code'] == selected_category]
+                abc_summary = get_abc_classification_summary(filtered_data, 'Class_abc', 'Actual')
+        
+        # 結果テーブルの作成
+        abc_result_data = []
+        total_count = 0
+        total_actual = 0
+        
+        sorted_categories = sorted(abc_summary['counts'].keys())
+        
+        for category in sorted_categories:
+            count = abc_summary['counts'].get(category, 0)
+            ratio = abc_summary['ratios'].get(category, 0)
+            actual_sum = abc_summary['actual_sums'].get(category, 0)
+            
+            abc_result_data.append({
+                'ABC区分': f"{category}区分",
+                '件数': count,
+                '実績合計': int(actual_sum),
+                '構成比率（%）': f"{ratio:.2f}%"
+            })
+            total_count += count
+            total_actual += actual_sum
+        
+        # 合計行を追加
+        abc_result_data.append({
+            'ABC区分': '合計',
+            '件数': total_count,
+            '実績合計': int(total_actual),
+            '構成比率（%）': "100.00%"
+        })
+        
+        result_df = pd.DataFrame(abc_result_data)
+        st.dataframe(result_df, use_container_width=True, hide_index=True)

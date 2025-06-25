@@ -23,9 +23,33 @@ if hasattr(st, '_get_session_state'):
 # カスタムCSSの適用
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# タイトル
-st.title(f"{APP_INFO['icon']} {APP_INFO['title']}")
-st.markdown("---")
+# ヘッダータイトル（Causal Impactと同様のデザイン）
+st.markdown(f"""
+<div style="
+    background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+    color: white;
+    padding: 2rem;
+    border-radius: 12px;
+    text-align: center;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.2);
+">
+    <h1 style="
+        font-size: 2.8rem;
+        margin: 0;
+        font-weight: 700;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    ">{APP_INFO['icon']} {APP_INFO['title']}</h1>
+    <p style="
+        font-size: 1.2rem;
+        margin: 0.5rem 0 0 0;
+        opacity: 0.95;
+        font-weight: 500;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
+    ">AI予測と現行計画値を多角的に比較・評価。計画精度を可視化し、改善余地を明らかにする実務特化型ダッシュボード</p>
+</div>
+""", unsafe_allow_html=True)
 
 # セッション状態の初期化
 if 'data' not in st.session_state:

@@ -71,8 +71,8 @@ ABC_EXPLANATION = {
     'auto_mode': "🟢 **自動生成モード**: 実績値に基づいてABC区分を分類（category_code）単位で自動計算します",
     'manual_mode': "🟡 **手動指定モード**: CSVファイルのABC区分を使用します",
     'auto_no_column': "💡 ABC区分が選択されていないため、実績値に基づいて自動生成されます",
-    'category_description_ratio': "実績値の多い順にソートし、累積構成比率をもとに以下の区分を分類（category_code）単位で割り当てます：\n**※実績値：各商品コードの全期間実績値合計を使用**",
-    'category_description_quantity': "月平均実績値の多い順にソートし、数量範囲をもとに以下の区分を分類（category_code）単位で割り当てます：\n**※月平均実績値：各商品コードの全期間実績値合計を対象期間の月数で割った値を使用**"
+    'category_description_ratio': "実績値の多い順にソートし、累積構成比率に基づき分類単位でABC分析を行います。 \n**※実績値＝全期間実績値合計**",
+    'category_description_quantity': "月平均実績値の多い順にソートし、数量範囲に基づき分類単位でABC分析を行います。 \n**※月平均実績値＝全期間実績値合計 ÷ 対象月数**"
 }
 
 # 誤差率タイプ別定義

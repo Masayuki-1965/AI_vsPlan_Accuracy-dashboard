@@ -192,7 +192,7 @@ def show_step1():
 def show_step2():
     """STEP 2: データマッピング"""
     st.markdown('<div class="step-title">データマッピング</div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-annotation">📋 CSVのカラム名をシステム項目にマッピングしてください（基本的に1回のみ実行）。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">CSVのカラム名をシステム項目にマッピングしてください（基本的に1回のみ実行）。</div>', unsafe_allow_html=True)
     
     # マッピング設定UI
     mapping = {}
@@ -248,7 +248,6 @@ def show_step2():
         
         # 任意項目の説明を追加
         st.markdown("", unsafe_allow_html=True)
-        st.info("💡 **任意項目について**: 分類フィルターや詳細分析を行う場合は「分類」の設定を推奨します。")
         
         # ABC区分の選択（任意項目に移動）
         mapping['Class_abc'] = st.selectbox(
@@ -258,10 +257,13 @@ def show_step2():
             help=HELP_TEXTS['abc_class_help']
         )
     
-    # 項目名変更機能の追加
+    # 任意項目についての説明
     st.markdown("---")
+    st.markdown('<div class="step-annotation">※任意項目について：詳細分析を行う場合は「分類」の設定を、既にABC区分を設定済みの場合は「ABC区分」をマッピングしてください。</div>', unsafe_allow_html=True)
+    
+    # 項目名変更機能の追加
     with st.expander("📝 項目名カスタマイズ（任意）"):
-        st.markdown("「計画01」「計画02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。")
+        st.markdown('<div class="step-annotation">「計画01」「計画02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。</div>', unsafe_allow_html=True)
         
         col_custom1, col_custom2, col_custom3 = st.columns(3)
         
@@ -327,13 +329,6 @@ def show_step2():
     if st.session_state.mapping_completed:
         st.markdown('<div class="result-section">', unsafe_allow_html=True)
         st.success("✅ マッピングを実施しました。下記に変換後のデータプレビューを表示します。")
-        
-        # 分類データの設定状況を表示
-        if 'category_code' in st.session_state.data.columns:
-            category_count = len(st.session_state.data['category_code'].dropna().unique())
-            st.info(f"✅ 分類データが設定されています（{category_count}種類）。年月別データ集計で分類フィルターが利用可能です。")
-        else:
-            st.warning("⚠️ 分類データが設定されていません。年月別データ集計では全データでの集計のみ可能です。")
         
         # 変換後データプレビュー
         st.markdown('<div class="section-subtitle">変換後データプレビュー（上位5件）</div>', unsafe_allow_html=True)
@@ -411,7 +406,7 @@ def show_step3():
                     help="分類ごとの月別合計値を確認できます"
                 )
             else:
-                st.info("💡 分類データがマッピングされていないため、全データを表示します。")
+                pass  # 分類データがない場合は注釈を削除
         
         except Exception as e:
             st.warning(f"⚠️ 分類フィルター処理中にエラーが発生しました: {str(e)}")
@@ -455,10 +450,10 @@ def show_step4():
     col1, col2 = st.columns(2)
     
     with col1:
-        execute_abc_generation = st.checkbox("☑ ABC区分を自動生成する（分類単位）")
+        execute_abc_generation = st.checkbox("ABC区分を自動生成する（分類単位）")
     
     with col2:
-        use_existing_abc = st.checkbox("☐ 既存のABC区分を使用する（全分類）", disabled=execute_abc_generation)
+        use_existing_abc = st.checkbox("既存のABC区分を使用する（全分類）", disabled=execute_abc_generation)
     
     # 排他制御: 一方が選択されたら他方を無効化
     if execute_abc_generation and use_existing_abc:

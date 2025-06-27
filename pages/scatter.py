@@ -9,7 +9,61 @@ from config.constants import UNIFIED_COLOR_PALETTE, PREDICTION_TYPE_NAMES
 
 def show():
     """散布図分析ページを表示"""
-    st.header("📈 散布図分析")
+    # CSSスタイル（UI/UXガイドライン準拠）の適用
+    st.markdown("""
+    <style>
+    /* STEP注釈・説明文 */
+    .step-annotation {
+        color: #666666;
+        font-size: 0.95em;
+        margin-bottom: 1.2em;
+    }
+
+    /* 大項目セクションボックス（STEPスタイル統一） */
+    .section-header-box {
+        background: #e8f4fd;
+        color: #1976d2;
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-align: left;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
+    }
+
+    .section-header-box h2 {
+        font-size: 1.8rem;
+        margin: 0 0 0.8rem 0;
+        font-weight: 600;
+        color: #1976d2;
+    }
+
+    .section-header-box p {
+        font-size: 1.05rem;
+        margin: 0;
+        color: #4a90e2;
+        line-height: 1.6;
+    }
+
+    /* STEP見出し（青線付きタイトル） */
+    .step-title {
+        font-size: 1.4em;
+        font-weight: bold;
+        color: #1976d2;
+        border-left: 4px solid #1976d2;
+        padding-left: 12px;
+        margin-bottom: 1em;
+        margin-top: 2em;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # ① 大項目デザイン修正（データセット作成と同じ階層の見出しスタイル）
+    st.markdown("""
+    <div class="section-header-box">
+        <h2>📈 散布図分析</h2>
+        <p>このセクションでは、分類単位でABC区分別の誤差率を分析・可視化し、区分ごとの誤差傾向を把握します。</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # データ確認
     if st.session_state.data is None:
@@ -18,17 +72,16 @@ def show():
     
     df = st.session_state.data
     
-    # フィルター設定（期間のみ）
-    st.subheader("🔍 フィルター設定")
+    # ③ フィルター項目の追加：「分類」「期間」の順で配置
     filtered_df = apply_filters(df)
     
     if filtered_df.empty:
         st.warning("⚠️ フィルター条件に該当するデータがありません。")
         return
     
-    st.info(f"📊 フィルター後データ件数: {len(filtered_df)}件")
+    st.success(f"✅ データ読み込み完了：{len(filtered_df)}件のデータが表示されています。")
     
-    # ABC区分別加重平均誤差率表を常時表示
+    # ② ABC区分別加重平均誤差率表を中項目見出しスタイルで表示
     if 'Class_abc' in filtered_df.columns:
         prediction_columns = ['AI_pred', 'Plan_01']
         if 'Plan_02' in df.columns:
@@ -37,49 +90,106 @@ def show():
         abc_avg_errors = calculate_abc_average_errors(filtered_df, prediction_columns)
         display_abc_average_table(abc_avg_errors, filtered_df)
     
-    # 散布図表示設定
-    st.subheader("⚙️ 表示設定")
+    # グラフタイプ選択とオプション設定
+    st.markdown("---")
+    
     col1, col2 = st.columns(2)
     
     with col1:
+        plot_type = st.selectbox(
+            "📊 グラフタイプ",
+            ['誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）', '予測値 vs 実績値散布図'],
+            key="plot_type_selector"
+        )
+    
+    with col2:
         prediction_columns = ['AI_pred', 'Plan_01']
         if 'Plan_02' in df.columns:
             prediction_columns.append('Plan_02')
         
+        # 初期選択は全て
+        default_selections = prediction_columns
+        
         selected_predictions = st.multiselect(
-            "表示する予測・計画",
+            "🎯 表示する予測・計画",
             prediction_columns,
-            default=prediction_columns,
-            format_func=get_prediction_name
+            default=default_selections,
+            format_func=get_prediction_name,
+            key="prediction_selector"
         )
     
-    with col2:
-        plot_type = st.selectbox(
-            "グラフタイプ",
-            ['予測値 vs 実績値散布図', '誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）']
-        )
+    # ④ 不要な「対比する予測・計画」フィルターを削除
     
     if not selected_predictions:
         st.warning("⚠️ 表示する予測・計画を選択してください。")
         return
     
+    # ⑤ 横軸・縦軸のスケール調整UIを前面表示
+    st.markdown('<div class="step-title">⚙️ 軸スケール設定</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # デフォルト値の計算（分類ごとに最適化）
+    default_y_max = get_optimal_y_max(filtered_df, selected_predictions)
+    
+    with col1:
+        x_min_input = st.number_input(
+            "横軸最小値 (%)",
+            value=-100,
+            step=10,
+            format="%d",
+            key="x_min_scatter_main"
+        )
+    
+    with col2:
+        x_max_input = st.number_input(
+            "横軸最大値 (%)",
+            value=200,
+            step=10,
+            format="%d",
+            key="x_max_scatter_main"
+        )
+    
+    with col3:
+        y_max_input = st.number_input(
+            "縦軸最大値",
+            value=default_y_max,
+            step=100,
+            format="%d",
+            key="y_max_scatter_main"
+        )
+    
     # 散布図作成・表示
     if plot_type == '誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）':
-        create_error_rate_scatter(filtered_df, selected_predictions)
+        create_error_rate_scatter(filtered_df, selected_predictions, x_min_input/100, x_max_input/100, y_max_input)
     else:
         create_prediction_vs_actual_scatter(filtered_df, selected_predictions)
 
 def apply_filters(df):
-    """フィルター設定UIとフィルター適用（期間のみ）"""
-    # 期間フィルターのみに変更
-    if 'Date' in df.columns:
-        date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
-        selected_date = st.selectbox("期間", date_options)
-    else:
-        selected_date = '全期間'
+    """③ フィルター設定UIとフィルター適用（分類・期間の順）"""
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # 分類フィルター（初期値：全分類）
+        if 'Category_code' in df.columns and not df['Category_code'].isna().all():
+            category_options = ['全分類'] + sorted(df['Category_code'].dropna().unique().tolist())
+            selected_category = st.selectbox("🏷️ 分類", category_options, key="category_filter")
+        else:
+            selected_category = '全分類'
+    
+    with col2:
+        # 期間フィルター（初期値：全期間）
+        if 'Date' in df.columns:
+            date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
+            selected_date = st.selectbox("📅 期間", date_options, key="date_filter")
+        else:
+            selected_date = '全期間'
     
     # フィルター適用
     filtered_df = df.copy()
+    
+    if selected_category != '全分類' and 'Category_code' in df.columns:
+        filtered_df = filtered_df[filtered_df['Category_code'] == selected_category]
     
     if selected_date != '全期間' and 'Date' in df.columns:
         filtered_df = filtered_df[filtered_df['Date'] == selected_date]
@@ -90,32 +200,28 @@ def get_prediction_name(pred_type):
     """予測タイプの表示名を取得"""
     return PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
 
-def create_error_rate_scatter(df, selected_predictions):
-    """誤差率散布図を作成"""
+def get_optimal_y_max(df, selected_predictions):
+    """⑤ 分類ごとに最適化されたデフォルト縦軸最大値を計算"""
+    max_values = []
+    for pred_col in selected_predictions:
+        if pred_col in df.columns:
+            max_val = df[pred_col].max()
+            if not pd.isna(max_val):
+                max_values.append(max_val)
     
-    # 横軸スケール設定UI
-    st.subheader("⚙️ 横軸スケール設定")
-    col1, col2 = st.columns(2)
+    if max_values:
+        overall_max = max(max_values)
+        # 10%のマージンを追加し、100の倍数に丸める
+        optimized_max = int((overall_max * 1.1 // 100 + 1) * 100)
+        return max(optimized_max, 1000)  # 最低1000は確保
+    else:
+        return 1000
+
+def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
+    """誤差率散布図を作成（⑤スケール調整対応、⑥凡例修正）"""
     
-    with col1:
-        x_min = st.number_input(
-            "横軸最小値 (%)",
-            value=-100,
-            step=10,
-            format="%d"
-        )
-    
-    with col2:
-        x_max = st.number_input(
-            "横軸最大値 (%)",
-            value=200,
-            step=10,
-            format="%d"
-        )
-    
-    # パーセンテージを小数に変換
-    x_min_decimal = x_min / 100
-    x_max_decimal = x_max / 100
+    # ② グラフタイトルを中項目見出しスタイルで表示
+    st.markdown('<div class="step-title">📊 誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）</div>', unsafe_allow_html=True)
     
     # サブプロット作成
     fig = make_subplots(
@@ -124,8 +230,13 @@ def create_error_rate_scatter(df, selected_predictions):
         subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
     )
 
-    # 各サブプロットの縦軸の最小値・最大値を統一するために事前計算
-    all_y_values = []
+    # ⑥ 凡例用の区分を整理（アルファベット順）
+    all_abc_classes = set()
+    if 'Class_abc' in df.columns:
+        all_abc_classes = set(df['Class_abc'].dropna().unique())
+    
+    # アルファベット順にソート
+    sorted_abc_classes = sorted(list(all_abc_classes))
     
     for i, pred_col in enumerate(selected_predictions):
         # 誤差率計算
@@ -144,9 +255,6 @@ def create_error_rate_scatter(df, selected_predictions):
         # 実績がゼロの場合を除外（計算不能）
         valid_data = df_with_errors[~df_with_errors['is_actual_zero']].copy()
         
-        # 縦軸統一用にY値を収集
-        all_y_values.extend(valid_data[pred_col].tolist())
-        
         # 散布図作成
         scatter = px.scatter(
             valid_data,
@@ -158,54 +266,57 @@ def create_error_rate_scatter(df, selected_predictions):
             title=f"{get_prediction_name(pred_col)}"
         )
         
-        # サブプロットに追加（凡例の名前を区分名に変更）
+        # ⑥ 凡例の表示順・ラベルの修正（アルファベット順、重複解消）
+        added_legends = set()
         for trace in scatter.data:
-            if 'Class_abc' in df.columns and trace.name in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']:
-                trace.name = f"{trace.name}区分"
+            if 'Class_abc' in df.columns and trace.name in sorted_abc_classes:
+                legend_name = f"{trace.name}区分"
+                trace.name = legend_name
+                # 重複削除のため、既に追加済みの凡例は非表示
+                if legend_name in added_legends or i > 0:
+                    trace.showlegend = False
+                else:
+                    added_legends.add(legend_name)
             fig.add_trace(trace, row=1, col=i+1)
         
         # X軸に0の線を追加
         fig.add_vline(x=0, line_dash="dash", line_color="gray", 
                      row=1, col=i+1, annotation_text="完全一致")
     
-    # 縦軸の範囲を統一（全データの最小・最大値に基づく）
-    if all_y_values:
-        y_min = min(all_y_values)
-        y_max = max(all_y_values)
-        y_margin = (y_max - y_min) * 0.05  # 5%のマージン
-        unified_y_range = [y_min - y_margin, y_max + y_margin]
-    else:
-        unified_y_range = None
-    
     # レイアウト調整
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）",
-        title_font_size=16  # フォントサイズを明示的に設定
+        title_text="",  # タイトルは外に出したので空にする
+        title_font_size=16
     )
     
-    # 横軸の設定（+/-記号付きの目盛り）
+    # ⑤ カスタムスケール適用
     fig.update_xaxes(
         title_text="誤差率", 
-        range=[x_min_decimal, x_max_decimal],
-        tickformat='+.0%',  # +/-記号付きのパーセンテージ表示
-        dtick=0.5  # 50%刻みで目盛り表示
+        range=[x_min, x_max],
+        tickformat='+.0%',
+        dtick=0.5
     )
     
-    # 縦軸の設定（統一範囲）
-    if unified_y_range:
-        fig.update_yaxes(
-            title_text="予測・計画値",
-            range=unified_y_range
-        )
-    else:
-        fig.update_yaxes(title_text="予測・計画値")
+    fig.update_yaxes(
+        title_text="予測・計画値",
+        range=[0, y_max]
+    )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # 凡例による表示切替機能の周知
+    st.markdown(
+        '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
+        unsafe_allow_html=True
+    )
 
 def create_prediction_vs_actual_scatter(df, selected_predictions):
-    """予測vs実績散布図を作成"""
+    """予測vs実績散布図を作成（⑥凡例修正）"""
+    
+    # ② グラフタイトルを中項目見出しスタイルで表示
+    st.markdown('<div class="step-title">📊 予測値 vs 実績値散布図</div>', unsafe_allow_html=True)
     
     # サブプロット作成
     fig = make_subplots(
@@ -214,20 +325,19 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
         subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
     )
     
+    # ⑥ 凡例用の区分を整理（アルファベット順）
+    all_abc_classes = set()
+    if 'Class_abc' in df.columns:
+        all_abc_classes = set(df['Class_abc'].dropna().unique())
+    
+    sorted_abc_classes = sorted(list(all_abc_classes))
+    
     for i, pred_col in enumerate(selected_predictions):
         # 色分け用の列を作成（ABC区分があれば使用）
         if 'Class_abc' in df.columns:
             color_col = 'Class_abc'
-            color_discrete_map = {
-                'A': '#FF9999',
-                'B': '#66B2FF', 
-                'C': '#99FF99',
-                'D': '#FFCC99',
-                'E': '#FF99CC',
-                'F': '#99CCFF',
-                'G': '#CCFF99',
-                'Z': '#FFB366'
-            }
+            color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
+                                if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
         else:
             color_col = None
             color_discrete_map = None
@@ -243,10 +353,16 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
             title=f"{get_prediction_name(pred_col)} vs 実績"
         )
         
-        # サブプロットに追加（凡例の名前を区分名に変更）
+        # ⑥ 凡例の表示順・ラベルの修正
+        added_legends = set()
         for trace in scatter.data:
-            if 'Class_abc' in df.columns and trace.name in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']:
-                trace.name = f"{trace.name}区分"
+            if 'Class_abc' in df.columns and trace.name in sorted_abc_classes:
+                legend_name = f"{trace.name}区分"
+                trace.name = legend_name
+                if legend_name in added_legends or i > 0:
+                    trace.showlegend = False
+                else:
+                    added_legends.add(legend_name)
             fig.add_trace(trace, row=1, col=i+1)
         
         # 完全一致ライン（y=x）を追加
@@ -269,14 +385,20 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="予測値 vs 実績値散布図",
-        title_font_size=16  # フォントサイズを明示的に設定
+        title_text="",  # タイトルは外に出したので空にする
+        title_font_size=16
     )
     
     fig.update_xaxes(title_text="実績値")
     fig.update_yaxes(title_text="予測・計画値")
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # 凡例による表示切替機能の周知
+    st.markdown(
+        '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
+        unsafe_allow_html=True
+    )
 
 def calculate_abc_average_errors(df, selected_predictions):
     """ABC区分別の加重平均誤差率を計算（全区分・3種誤差率対応）"""
@@ -333,10 +455,17 @@ def calculate_abc_average_errors(df, selected_predictions):
     return abc_errors
 
 def display_abc_average_table(abc_errors, filtered_df):
-    """ABC区分別加重平均誤差率のテーブルを表示（2段ヘッダー・3誤差率対応）"""
+    """② ABC区分別加重平均誤差率のテーブルを中項目見出しスタイルで表示"""
     if not abc_errors:
         st.info("ABC区分データがありません")
         return
+    
+    # ② 中項目見出し（STEP見出しスタイル統一）
+    st.markdown('<div class="step-title">📊 ABC区分別 加重平均誤差率</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="step-annotation">誤差傾向の散布図分析における前提情報として、区分別の加重平均誤差率（絶対値・負方向・正方向）を表示</div>',
+        unsafe_allow_html=True
+    )
     
     # 全ての予測カラムから全てのABC区分を取得
     all_abc_classes = set()
@@ -351,17 +480,6 @@ def display_abc_average_table(abc_errors, filtered_df):
     sorted_abc_classes = sorted(list(all_abc_classes))
     
     # 2段ヘッダー構造のMultiIndex作成
-    # レベル1: 区分、実績合計、絶対誤差率、負の誤差率、正の誤差率
-    # レベル2: AI予測, 計画01
-    columns_level1 = ['区分', '件数', '実績合計', '絶対誤差率', '負の誤差率', '正の誤差率']
-    columns_level2 = ['', '', '']  # 区分、件数、実績合計は単列
-    
-    for error_type in ['絶対誤差率', '負の誤差率', '正の誤差率']:
-        for pred_col in sorted(abc_errors.keys()):
-            pred_name = get_prediction_name(pred_col)
-            columns_level2.append(pred_name)
-    
-    # MultiIndex列作成
     columns_tuples = [
         ('区分', ''),
         ('件数', ''),
@@ -425,15 +543,14 @@ def display_abc_average_table(abc_errors, filtered_df):
     # 合計行の作成
     total_row_data = ['合計']
     
-    # 件数と実績合計の合計
-    grand_total_count = sum(total_counts.values()) // len(total_counts) if total_counts else 0  # 重複排除
-    grand_total_actual = sum(total_actual_sums.values()) // len(total_actual_sums) if total_actual_sums else 0  # 重複排除
-    
     # より正確な合計計算（最初の予測カラムから全データの合計を計算）
     if abc_errors:
         first_pred = list(abc_errors.keys())[0]
         grand_total_count = sum(stats['count'] for stats in abc_errors[first_pred].values())
         grand_total_actual = sum(stats['actual_sum'] for stats in abc_errors[first_pred].values())
+    else:
+        grand_total_count = 0
+        grand_total_actual = 0
     
     # 合計行も文字列形式でフォーマット
     total_row_data.extend([f"{grand_total_count:,}", f"{grand_total_actual:,.0f}"])
@@ -488,10 +605,6 @@ def display_abc_average_table(abc_errors, filtered_df):
     # DataFrame作成
     df_table = pd.DataFrame(table_data, columns=multi_columns)
     
-    # 注記付きでタイトル表示
-    st.markdown("### ABC区分別 加重平均誤差率（絶対値・負方向・正方向）")
-    st.markdown("**※ 誤差率は実績値で重みづけした加重平均**")
-    
     # カスタムCSS for 等幅列
     table_css = """
     <style>
@@ -513,9 +626,17 @@ def display_abc_average_table(abc_errors, filtered_df):
     """
     st.markdown(table_css, unsafe_allow_html=True)
     
-    # テーブル表示（column_configなしでシンプルに）
+    # テーブル表示
     st.dataframe(
         df_table,
         use_container_width=True,
         hide_index=True
-    ) 
+    )
+    
+    # 注釈の配置とスタイル調整（表の下部に移動、UI/UXガイドライン準拠）
+    st.markdown(
+        '<div class="step-annotation">※ 誤差率は実績値で重みづけした加重平均値です。</div>',
+        unsafe_allow_html=True
+    )
+
+ 

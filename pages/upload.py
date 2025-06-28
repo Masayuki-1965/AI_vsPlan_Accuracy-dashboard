@@ -512,11 +512,28 @@ def show_step4():
         if 'category_code' in st.session_state.data.columns:
             st.markdown('<div class="section-subtitle">対象分類選択</div>', unsafe_allow_html=True)
             available_categories = sorted(st.session_state.data['category_code'].dropna().unique().tolist())
-            st.session_state.selected_generation_categories = st.multiselect(
+            # 「全て」選択肢を先頭に追加
+            category_options = ['全て'] + available_categories
+            
+            # 現在の選択状態を確認・調整
+            current_selection = st.session_state.selected_generation_categories if hasattr(st.session_state, 'selected_generation_categories') else []
+            
+            selected_categories = st.multiselect(
                 "「分類」フィルター（※複数選択可）",
-                available_categories,
-                default=st.session_state.selected_generation_categories
+                category_options,
+                default=current_selection if current_selection else ['全て']
             )
+            
+            # 「全て」が選択された場合の処理
+            if '全て' in selected_categories:
+                # 「全て」と他の項目が同時選択された場合は「全て」のみにする
+                if len(selected_categories) > 1:
+                    selected_categories = ['全て']
+                    st.rerun()
+                st.session_state.selected_generation_categories = []  # 全分類対象の場合は空リストで処理
+                st.info("💡 「全て」を選択：すべての分類に対して、同じ基準で分類単位ごとにABC区分を自動生成します。")
+            else:
+                st.session_state.selected_generation_categories = selected_categories
         
         # ABC区分設定の詳細設定
         show_abc_settings()

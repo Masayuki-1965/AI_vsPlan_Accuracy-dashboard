@@ -106,24 +106,24 @@ def show():
     <div style="
         background: #e8f4fd;
         color: #1976d2;
-        padding: 1.5rem;
+        padding: 1rem 1.5rem;
         border-radius: 12px;
         text-align: left;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
         box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
     ">
         <h2 style="
             font-size: 1.9rem;
-            margin: 0 0 0.8rem 0;
+            margin: 0 0 0.2rem 0;
             font-weight: 600;
             color: #1976d2;
         ">🛠️ データセット作成</h2>
         <p style="
-            font-size: 1.2rem;
+            font-size: 1.05rem;
             margin: 0;
             color: #4a90e2;
             line-height: 1.6;
-        ">このセクションでは、AI予測と現行計画値の精度比較分析に必要なCSVデータを読み込み、分析用データセットを作成します。</p>
+        ">このセクションでは、AI予測値と現行計画値の精度を比較・分析するために必要なCSVデータを読み込み、分析用のデータセットを作成します。</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -148,9 +148,10 @@ def show_step1():
     st.markdown('<div class="step-annotation">Browse filesでファイルを指定、またはCSVファイルをドラッグ＆ドロップしてください。</div>', unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
-        "",
+        "ファイル選択",
         type=['csv'],
-        help=HELP_TEXTS['file_upload_help']
+        help=HELP_TEXTS['file_upload_help'],
+        label_visibility="collapsed"
     )
     
     # 新しいファイルがアップロードされた場合
@@ -247,7 +248,8 @@ def show_step2():
         )
         
         # 任意項目の説明を追加
-        st.markdown("", unsafe_allow_html=True)
+        # スペース調整用
+        st.markdown('<div style="margin-bottom: 0.5rem;"></div>', unsafe_allow_html=True)
         
         # ABC区分の選択（任意項目に移動）
         mapping['Class_abc'] = st.selectbox(
@@ -263,20 +265,20 @@ def show_step2():
     
     # 項目名変更機能の追加
     with st.expander("📝 項目名カスタマイズ（任意）"):
-        st.markdown('<div class="step-annotation">「計画01」「計画02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。</div>', unsafe_allow_html=True)
+        st.markdown('<div class="step-annotation">「計画値01」「計画値02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。</div>', unsafe_allow_html=True)
         
         col_custom1, col_custom2, col_custom3 = st.columns(3)
         
         with col_custom1:
             st.session_state.custom_column_names['Plan_01'] = st.text_input(
-                "計画01の表示名",
+                "計画値01の表示名",
                 value=st.session_state.custom_column_names['Plan_01'],
                 max_chars=20
             )
         
         with col_custom2:
             st.session_state.custom_column_names['Plan_02'] = st.text_input(
-                "計画02の表示名",
+                "計画値02の表示名",
                 value=st.session_state.custom_column_names['Plan_02'],
                 max_chars=20
             )
@@ -335,6 +337,12 @@ def show_step2():
         preview_df = st.session_state.data.head(5).copy()
         preview_df.index = range(1, len(preview_df) + 1)
         
+        # 年月の表示形式を統一（YYYYMM → YYYY年MM月）
+        if 'Date' in preview_df.columns:
+            preview_df['Date'] = preview_df['Date'].apply(lambda x: 
+                f"{str(x)[:4]}年{str(x)[4:6]}月" if len(str(x)) == 6 else str(x)
+            )
+        
         # カスタム項目名を反映
         display_names = get_display_column_names()
         preview_df_display = preview_df.copy()
@@ -349,7 +357,7 @@ def show_step2():
 def show_step3():
     """STEP 3: 月別合計値補正"""
     st.markdown('<div class="step-title">月別合計値補正</div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-annotation">分類ごとの月別合計値を計画値01に合わせて調整します。AI予測および計画値02（存在する場合）が対象です。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">分類ごとの月別合計値を計画値01に合わせて調整します。AI予測値および計画値02（存在する場合）が対象です。</div>', unsafe_allow_html=True)
     
     # 月別合計値補正の選択
     st.session_state.monthly_correction_enabled = st.checkbox(
@@ -429,9 +437,37 @@ def show_step3():
                 # 全データまたは分類フィルターなしの場合
                 monthly_summary = create_monthly_summary_table(st.session_state.data)
             
-            # テーブル表示
+            # テーブル表示（Streamlit標準のcolumn_configで数値項目を右詰め）
             if not monthly_summary.empty:
-                st.dataframe(monthly_summary, use_container_width=True, hide_index=True)
+                # カラム設定を動的に作成
+                column_config = {
+                    "年月": st.column_config.TextColumn(
+                        "年月",
+                        help="対象年月",
+                        width="small"
+                    ),
+                    "実績合計": st.column_config.NumberColumn(
+                        "実績合計",
+                        help="実績値の合計",
+                        format="%d"
+                    )
+                }
+                
+                # 動的なカラム名に対応
+                for col in monthly_summary.columns:
+                    if col not in ["年月", "実績合計"]:
+                        column_config[col] = st.column_config.NumberColumn(
+                            col,
+                            help=f"{col}の合計値",
+                            format="%d"
+                        )
+                
+                st.dataframe(
+                    monthly_summary, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config=column_config
+                )
             else:
                 st.warning("⚠️ 表示するデータがありません。")
                 
@@ -546,9 +582,9 @@ def get_display_column_names():
     if 'custom_column_names' in st.session_state:
         for key, custom_name in st.session_state.custom_column_names.items():
             if custom_name.strip():  # 空でない場合のみ
-                # 9文字以内に省略
-                if len(custom_name) > 9:
-                    display_names[key] = custom_name[:8] + '…'
+                # 10文字以内に省略
+                if len(custom_name) > 10:
+                    display_names[key] = custom_name[:9] + '…'
                 else:
                     display_names[key] = custom_name
     
@@ -883,6 +919,31 @@ def create_monthly_summary_table(df):
         # 年月データの並び替え
         unique_dates = sorted(df['Date'].unique(), reverse=True)[:12]
         
+        # カスタマイズされた項目名を取得
+        def get_custom_column_name(col_key):
+            """カスタマイズされた項目名を取得（10文字制限付き）"""
+            if 'custom_column_names' in st.session_state and col_key in st.session_state.custom_column_names:
+                custom_name = st.session_state.custom_column_names[col_key].strip()
+                if custom_name:
+                    # 全角10文字を超える場合は省略
+                    if len(custom_name) > 10:
+                        return custom_name[:9] + '…'
+                    else:
+                        return custom_name
+            
+            # デフォルト名称
+            defaults = {
+                'AI_pred': 'AI予測',
+                'Plan_01': '計画01',
+                'Plan_02': '計画02'
+            }
+            return defaults.get(col_key, col_key)
+        
+        # カスタム項目名を取得
+        ai_pred_name = get_custom_column_name('AI_pred')
+        plan_01_name = get_custom_column_name('Plan_01')
+        plan_02_name = get_custom_column_name('Plan_02')
+        
         # 集計データの作成
         summary_data = []
         
@@ -899,13 +960,13 @@ def create_monthly_summary_table(df):
             row = {
                 '年月': formatted_date,
                 '実績合計': int(date_data['Actual'].sum()),
-                'AI予測': int(date_data['AI_pred'].sum()),
-                '計画01': int(date_data['Plan_01'].sum())
+                ai_pred_name: int(date_data['AI_pred'].sum()),
+                plan_01_name: int(date_data['Plan_01'].sum())
             }
             
             # Plan_02が存在する場合は追加
             if 'Plan_02' in df.columns:
-                row['計画02'] = int(date_data['Plan_02'].sum())
+                row[plan_02_name] = int(date_data['Plan_02'].sum())
             
             summary_data.append(row)
         
@@ -913,16 +974,18 @@ def create_monthly_summary_table(df):
         total_row = {
             '年月': '合計',
             '実績合計': int(df[df['Date'].isin(unique_dates)]['Actual'].sum()),
-            'AI予測': int(df[df['Date'].isin(unique_dates)]['AI_pred'].sum()),
-            '計画01': int(df[df['Date'].isin(unique_dates)]['Plan_01'].sum())
+            ai_pred_name: int(df[df['Date'].isin(unique_dates)]['AI_pred'].sum()),
+            plan_01_name: int(df[df['Date'].isin(unique_dates)]['Plan_01'].sum())
         }
         
         if 'Plan_02' in df.columns:
-            total_row['計画02'] = int(df[df['Date'].isin(unique_dates)]['Plan_02'].sum())
+            total_row[plan_02_name] = int(df[df['Date'].isin(unique_dates)]['Plan_02'].sum())
         
         summary_data.append(total_row)
         
-        return pd.DataFrame(summary_data)
+        result_df = pd.DataFrame(summary_data)
+        
+        return result_df
         
     except Exception as e:
         st.error(f"年月別集計テーブル作成エラー: {str(e)}")
@@ -1149,7 +1212,7 @@ def show_abc_generation_results():
             abc_result_data.append({
                 'ABC区分': f"{category}区分",
                 '件数': count,
-                '実績合計': int(actual_sum),
+                '実績合計': actual_sum,
                 '構成比率（%）': f"{ratio:.2f}%"
             })
             total_count += count
@@ -1159,9 +1222,36 @@ def show_abc_generation_results():
         abc_result_data.append({
             'ABC区分': '合計',
             '件数': total_count,
-            '実績合計': int(total_actual),
+            '実績合計': total_actual,
             '構成比率（%）': "100.00%"
         })
         
         result_df = pd.DataFrame(abc_result_data)
-        st.dataframe(result_df, use_container_width=True, hide_index=True)
+        
+        # Streamlit標準のcolumn_configで数値項目を右詰め表示
+        st.dataframe(
+            result_df, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={
+                "ABC区分": st.column_config.TextColumn(
+                    "ABC区分",
+                    help="ABC区分の分類",
+                    width="medium"
+                ),
+                "件数": st.column_config.NumberColumn(
+                    "件数",
+                    help="該当する商品の件数",
+                    format="%d"
+                ),
+                "実績合計": st.column_config.NumberColumn(
+                    "実績合計",
+                    help="実績値の合計",
+                    format="%.0f"
+                ),
+                "構成比率（%）": st.column_config.TextColumn(
+                    "構成比率（%）",
+                    help="全体に占める構成比率"
+                )
+            }
+        )

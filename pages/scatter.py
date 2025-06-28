@@ -23,16 +23,16 @@ def show():
     .section-header-box {
         background: #e8f4fd;
         color: #1976d2;
-        padding: 1.5rem;
+        padding: 1rem 1.5rem;
         border-radius: 12px;
         text-align: left;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
         box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
     }
 
     .section-header-box h2 {
-        font-size: 1.8rem;
-        margin: 0 0 0.8rem 0;
+        font-size: 1.9rem;
+        margin: 0 0 0.2rem 0;
         font-weight: 600;
         color: #1976d2;
     }
@@ -61,7 +61,7 @@ def show():
     st.markdown("""
     <div class="section-header-box">
         <h2>📈 散布図分析</h2>
-        <p>このセクションでは、分類単位でABC区分別の誤差率を分析・可視化し、区分ごとの誤差傾向を把握します。</p>
+        <p>このセクションでは、分類単位でABC区分別の誤差率を多角的に分析・可視化し、各区分における誤差の傾向や特徴を明らかにします。</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -269,7 +269,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
         # ⑥ 凡例の表示順・ラベルの修正（アルファベット順、重複解消）
         added_legends = set()
         for trace in scatter.data:
-            if 'Class_abc' in df.columns and trace.name in sorted_abc_classes:
+            if 'Class_abc' in df.columns and trace.name and trace.name in sorted_abc_classes:
                 legend_name = f"{trace.name}区分"
                 trace.name = legend_name
                 # 重複削除のため、既に追加済みの凡例は非表示
@@ -277,6 +277,9 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
                     trace.showlegend = False
                 else:
                     added_legends.add(legend_name)
+            elif not trace.name:  # 空の名前の場合はデフォルト名を設定
+                trace.name = "データ"
+                trace.showlegend = False
             fig.add_trace(trace, row=1, col=i+1)
         
         # X軸に0の線を追加
@@ -287,7 +290,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="",  # タイトルは外に出したので空にする
+        title_text="誤差率散布図",  # タイトルを設定
         title_font_size=16
     )
     
@@ -356,13 +359,16 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
         # ⑥ 凡例の表示順・ラベルの修正
         added_legends = set()
         for trace in scatter.data:
-            if 'Class_abc' in df.columns and trace.name in sorted_abc_classes:
+            if 'Class_abc' in df.columns and trace.name and trace.name in sorted_abc_classes:
                 legend_name = f"{trace.name}区分"
                 trace.name = legend_name
                 if legend_name in added_legends or i > 0:
                     trace.showlegend = False
                 else:
                     added_legends.add(legend_name)
+            elif not trace.name:  # 空の名前の場合はデフォルト名を設定
+                trace.name = "データ"
+                trace.showlegend = False
             fig.add_trace(trace, row=1, col=i+1)
         
         # 完全一致ライン（y=x）を追加
@@ -385,7 +391,7 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
     fig.update_layout(
         height=600,
         showlegend=True,
-        title_text="",  # タイトルは外に出したので空にする
+        title_text="予測値 vs 実績値散布図",  # タイトルを設定
         title_font_size=16
     )
     
@@ -481,9 +487,9 @@ def display_abc_average_table(abc_errors, filtered_df):
     
     # 2段ヘッダー構造のMultiIndex作成
     columns_tuples = [
-        ('区分', ''),
-        ('件数', ''),
-        ('実績合計', '')
+        ('区分', '区分'),
+        ('件数', '件数'),
+        ('実績合計', '実績合計')
     ]
     
     for error_type in ['絶対誤差率', '負の誤差率', '正の誤差率']:

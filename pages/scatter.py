@@ -79,8 +79,6 @@ def show():
         st.warning("⚠️ フィルター条件に該当するデータがありません。")
         return
     
-    st.success(f"✅ データ読み込み完了：{len(filtered_df)}件のデータが表示されています。")
-    
     # ② ABC区分別加重平均誤差率表を中項目見出しスタイルで表示
     if 'Class_abc' in filtered_df.columns:
         prediction_columns = ['AI_pred', 'Plan_01']
@@ -167,17 +165,29 @@ def show():
 
 def apply_filters(df):
     """③ フィルター設定UIとフィルター適用（分類・期間の順）"""
-    col1, col2 = st.columns(2)
+    # 分類がマッピングされているかどうかを確認
+    has_category = 'category_code' in df.columns and not df['category_code'].isna().all()
     
-    with col1:
-        # 分類フィルター（初期値：全分類）
-        if 'Category_code' in df.columns and not df['Category_code'].isna().all():
-            category_options = ['全分類'] + sorted(df['Category_code'].dropna().unique().tolist())
+    if has_category:
+        # 分類フィルターありの場合
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 分類フィルター（初期値：未選択）
+            category_options = [''] + sorted(df['category_code'].dropna().unique().tolist())
             selected_category = st.selectbox("🏷️ 分類", category_options, key="category_filter")
-        else:
-            selected_category = '全分類'
-    
-    with col2:
+        
+        with col2:
+            # 期間フィルター（初期値：全期間）
+            if 'Date' in df.columns:
+                date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
+                selected_date = st.selectbox("📅 期間", date_options, key="date_filter")
+            else:
+                selected_date = '全期間'
+    else:
+        # 分類フィルターなしの場合（期間フィルターのみ）
+        selected_category = ''
+        
         # 期間フィルター（初期値：全期間）
         if 'Date' in df.columns:
             date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
@@ -188,8 +198,8 @@ def apply_filters(df):
     # フィルター適用
     filtered_df = df.copy()
     
-    if selected_category != '全分類' and 'Category_code' in df.columns:
-        filtered_df = filtered_df[filtered_df['Category_code'] == selected_category]
+    if selected_category and has_category:
+        filtered_df = filtered_df[filtered_df['category_code'] == selected_category]
     
     if selected_date != '全期間' and 'Date' in df.columns:
         filtered_df = filtered_df[filtered_df['Date'] == selected_date]
@@ -485,11 +495,11 @@ def display_abc_average_table(abc_errors, filtered_df):
     # ABC区分をソート（A, B, C, D...の順）
     sorted_abc_classes = sorted(list(all_abc_classes))
     
-    # 2段ヘッダー構造のMultiIndex作成
+    # 2段ヘッダー構造のMultiIndex作成（1行目非表示対応）
     columns_tuples = [
-        ('区分', '区分'),
-        ('件数', '件数'),
-        ('実績合計', '実績合計')
+        ('', '区分'),
+        ('', '件数'),
+        ('', '実績合計')
     ]
     
     for error_type in ['絶対誤差率', '負の誤差率', '正の誤差率']:
@@ -611,7 +621,7 @@ def display_abc_average_table(abc_errors, filtered_df):
     # DataFrame作成
     df_table = pd.DataFrame(table_data, columns=multi_columns)
     
-    # カスタムCSS for 等幅列
+    # カスタムCSS for 等幅列（1行目ヘッダー非表示）
     table_css = """
     <style>
     .stDataFrame > div {
@@ -627,6 +637,16 @@ def display_abc_average_table(abc_errors, filtered_df):
     }
     .stDataFrame th:first-child, .stDataFrame td:first-child {
         width: 12% !important;  /* 区分列をやや広く */
+    }
+    /* 1行目のヘッダー（MultiIndexの最上位レベル）を非表示 */
+    .stDataFrame thead tr:first-child {
+        display: none;
+    }
+    /* 左側3列の1行目ヘッダーの境界線も非表示 */
+    .stDataFrame thead tr:first-child th:nth-child(1),
+    .stDataFrame thead tr:first-child th:nth-child(2),
+    .stDataFrame thead tr:first-child th:nth-child(3) {
+        border-bottom: none !important;
     }
     </style>
     """

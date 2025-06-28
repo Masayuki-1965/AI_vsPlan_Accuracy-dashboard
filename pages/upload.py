@@ -437,33 +437,41 @@ def show_step3():
                 # 全データまたは分類フィルターなしの場合
                 monthly_summary = create_monthly_summary_table(st.session_state.data)
             
-            # テーブル表示（Streamlit標準のcolumn_configで数値項目を右詰め）
+            # テーブル表示（Streamlit標準のcolumn_configで数値項目を左詰めカンマ付き）
             if not monthly_summary.empty:
-                # カラム設定を動的に作成
+                # カラム設定を動的に作成（均等割り）
                 column_config = {
                     "年月": st.column_config.TextColumn(
                         "年月",
                         help="対象年月",
-                        width="small"
+                        width="medium"
                     ),
-                    "実績合計": st.column_config.NumberColumn(
+                    "実績合計": st.column_config.TextColumn(
                         "実績合計",
                         help="実績値の合計",
-                        format="%d"
+                        width="medium"
                     )
                 }
                 
                 # 動的なカラム名に対応
                 for col in monthly_summary.columns:
                     if col not in ["年月", "実績合計"]:
-                        column_config[col] = st.column_config.NumberColumn(
+                        column_config[col] = st.column_config.TextColumn(
                             col,
                             help=f"{col}の合計値",
-                            format="%d"
+                            width="medium"
+                        )
+                
+                # 数値項目にカンマを追加
+                formatted_summary = monthly_summary.copy()
+                for col in formatted_summary.columns:
+                    if col != "年月":  # 年月以外の数値項目
+                        formatted_summary[col] = formatted_summary[col].apply(
+                            lambda x: f"{x:,}" if isinstance(x, (int, float)) and str(x) != "合計" else x
                         )
                 
                 st.dataframe(
-                    monthly_summary, 
+                    formatted_summary, 
                     use_container_width=True, 
                     hide_index=True,
                     column_config=column_config
@@ -1245,9 +1253,18 @@ def show_abc_generation_results():
         
         result_df = pd.DataFrame(abc_result_data)
         
-        # Streamlit標準のcolumn_configで数値項目を右詰め表示
+        # 数値項目にカンマを追加
+        formatted_abc_df = result_df.copy()
+        formatted_abc_df['件数'] = formatted_abc_df['件数'].apply(
+            lambda x: f"{x:,}" if isinstance(x, (int, float)) else x
+        )
+        formatted_abc_df['実績合計'] = formatted_abc_df['実績合計'].apply(
+            lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) else x
+        )
+        
+        # Streamlit標準のcolumn_configで数値項目を左詰めカンマ付き表示（均等割り）
         st.dataframe(
-            result_df, 
+            formatted_abc_df, 
             use_container_width=True, 
             hide_index=True,
             column_config={
@@ -1256,19 +1273,20 @@ def show_abc_generation_results():
                     help="ABC区分の分類",
                     width="medium"
                 ),
-                "件数": st.column_config.NumberColumn(
+                "件数": st.column_config.TextColumn(
                     "件数",
                     help="該当する商品の件数",
-                    format="%d"
+                    width="medium"
                 ),
-                "実績合計": st.column_config.NumberColumn(
+                "実績合計": st.column_config.TextColumn(
                     "実績合計",
                     help="実績値の合計",
-                    format="%.0f"
+                    width="medium"
                 ),
                 "構成比率（%）": st.column_config.TextColumn(
                     "構成比率（%）",
-                    help="全体に占める構成比率"
+                    help="全体に占める構成比率",
+                    width="medium"
                 )
             }
         )

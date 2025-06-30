@@ -173,8 +173,8 @@ def apply_filters(df):
         col1, col2 = st.columns(2)
         
         with col1:
-            # 分類フィルター（初期値：未選択）
-            category_options = [''] + sorted(df['category_code'].dropna().unique().tolist())
+            # 分類フィルター（初期値：全て）
+            category_options = ['全て'] + sorted(df['category_code'].dropna().unique().tolist())
             selected_category = st.selectbox("🏷️ 分類", category_options, key="category_filter")
         
         with col2:
@@ -186,7 +186,7 @@ def apply_filters(df):
                 selected_date = '全期間'
     else:
         # 分類フィルターなしの場合（期間フィルターのみ）
-        selected_category = ''
+        selected_category = '全て'
         
         # 期間フィルター（初期値：全期間）
         if 'Date' in df.columns:
@@ -198,17 +198,35 @@ def apply_filters(df):
     # フィルター適用
     filtered_df = df.copy()
     
-    if selected_category and has_category:
+    # 分類フィルター適用
+    if selected_category != '全て':
         filtered_df = filtered_df[filtered_df['category_code'] == selected_category]
     
-    if selected_date != '全期間' and 'Date' in df.columns:
+    # 期間フィルター適用
+    if selected_date != '全期間':
         filtered_df = filtered_df[filtered_df['Date'] == selected_date]
     
     return filtered_df
 
 def get_prediction_name(pred_type):
-    """予測タイプの表示名を取得"""
-    return PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
+    """予測タイプの表示名を取得（カスタム項目名対応・6文字省略対応）"""
+    # カスタム項目名があるかチェック
+    if 'custom_column_names' in st.session_state and pred_type in st.session_state.custom_column_names:
+        custom_name = st.session_state.custom_column_names[pred_type].strip()
+        if custom_name:
+            # 全角6文字を超える場合は省略
+            if len(custom_name) > 6:
+                return custom_name[:6] + '…'
+            else:
+                return custom_name
+    
+    # デフォルト名を取得
+    default_name = PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
+    # デフォルト名も6文字チェック
+    if len(default_name) > 6:
+        return default_name[:6] + '…'
+    else:
+        return default_name
 
 def get_optimal_y_max(df, selected_predictions):
     """⑤ 分類ごとに最適化されたデフォルト縦軸最大値を計算"""
@@ -233,97 +251,130 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
     # ② グラフタイトルを中項目見出しスタイルで表示
     st.markdown('<div class="step-title">📊 誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）</div>', unsafe_allow_html=True)
     
-    # サブプロット作成
-    fig = make_subplots(
-        rows=1, 
-        cols=len(selected_predictions),
-        subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
-    )
+    try:
+        # データ検証
+        if df.empty:
+            st.warning("⚠️ 表示するデータがありません。")
+            return
+        
+        # サブプロット作成
+        fig = make_subplots(
+            rows=1, 
+            cols=len(selected_predictions),
+            subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
+        )
 
-    # ⑥ 凡例用の区分を整理（アルファベット順）
-    all_abc_classes = set()
-    if 'Class_abc' in df.columns:
-        all_abc_classes = set(df['Class_abc'].dropna().unique())
-    
-    # アルファベット順にソート
-    sorted_abc_classes = sorted(list(all_abc_classes))
-    
-    for i, pred_col in enumerate(selected_predictions):
-        # 誤差率計算
-        df_with_errors = calculate_error_rates(df, pred_col, 'Actual')
-        
-        # 色分け用の列を作成（ABC区分があれば使用）
+        # ⑥ 凡例用の区分を整理（アルファベット順）
+        all_abc_classes = set()
         if 'Class_abc' in df.columns:
-            color_col = 'Class_abc'
-            # ABC区分カラーを統一パレットから取得
-            color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
-                                if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
-        else:
-            color_col = None
-            color_discrete_map = None
+            all_abc_classes = set(df['Class_abc'].dropna().unique())
         
-        # 実績がゼロの場合を除外（計算不能）
-        valid_data = df_with_errors[~df_with_errors['is_actual_zero']].copy()
+        # アルファベット順にソート
+        sorted_abc_classes = sorted(list(all_abc_classes))
         
-        # 散布図作成
-        scatter = px.scatter(
-            valid_data,
-            x='error_rate',
-            y=pred_col,
-            color=color_col,
-            color_discrete_map=color_discrete_map,
-            hover_data=['P_code', 'Actual', pred_col, 'absolute_error_rate'],
-            title=f"{get_prediction_name(pred_col)}"
+        for i, pred_col in enumerate(selected_predictions):
+            try:
+                # 予測カラムが存在するかチェック
+                if pred_col not in df.columns:
+                    st.warning(f"⚠️ カラム '{pred_col}' が見つかりません。")
+                    continue
+                
+                # 誤差率計算
+                df_with_errors = calculate_error_rates(df, pred_col, 'Actual')
+                
+                # データ検証：NaN、Inf値を除去
+                df_with_errors = df_with_errors.replace([np.inf, -np.inf], np.nan)
+                df_with_errors = df_with_errors.dropna(subset=['error_rate', pred_col, 'Actual'])
+                
+                # 実績がゼロの場合を除外（計算不能）
+                valid_data = df_with_errors[~df_with_errors['is_actual_zero']].copy()
+                
+                if valid_data.empty:
+                    st.warning(f"⚠️ {get_prediction_name(pred_col)} の有効なデータがありません。")
+                    continue
+                
+                # 極端な値を制限（グラフ表示範囲外のデータをクリップ）
+                valid_data.loc[:, 'error_rate'] = valid_data['error_rate'].clip(lower=x_min*2, upper=x_max*2)
+                valid_data.loc[:, pred_col] = valid_data[pred_col].clip(lower=0, upper=y_max*2)
+                
+                # 色分け用の列を作成（ABC区分があれば使用）
+                if 'Class_abc' in df.columns:
+                    color_col = 'Class_abc'
+                    # ABC区分カラーを統一パレットから取得
+                    color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
+                                        if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
+                else:
+                    color_col = None
+                    color_discrete_map = None
+                
+                # 散布図作成（エラーハンドリング付き）
+                scatter = px.scatter(
+                    valid_data,
+                    x='error_rate',
+                    y=pred_col,
+                    color=color_col,
+                    color_discrete_map=color_discrete_map,
+                    hover_data=['P_code', 'Actual', pred_col, 'absolute_error_rate'],
+                    title=f"{get_prediction_name(pred_col)}"
+                )
+                
+                # ⑥ 凡例の表示順・ラベルの修正（アルファベット順、重複解消）
+                added_legends = set()
+                for trace in scatter.data:
+                    if 'Class_abc' in df.columns and trace.name and trace.name in sorted_abc_classes:
+                        legend_name = f"{trace.name}区分"
+                        trace.name = legend_name
+                        # 重複削除のため、既に追加済みの凡例は非表示
+                        if legend_name in added_legends or i > 0:
+                            trace.showlegend = False
+                        else:
+                            added_legends.add(legend_name)
+                    elif not trace.name:  # 空の名前の場合はデフォルト名を設定
+                        trace.name = "データ"
+                        trace.showlegend = False
+                    fig.add_trace(trace, row=1, col=i+1)
+                
+                # X軸に0の線を追加
+                fig.add_vline(x=0, line_dash="dash", line_color="gray", 
+                             row=1, col=i+1, annotation_text="完全一致")
+                
+            except Exception as sub_error:
+                st.error(f"❌ {get_prediction_name(pred_col)} の散布図作成でエラー: {str(sub_error)}")
+                continue
+        
+        # レイアウト調整
+        fig.update_layout(
+            height=600,
+            showlegend=True,
+            title_text="誤差率散布図",  # タイトルを設定
+            title_font_size=16
         )
         
-        # ⑥ 凡例の表示順・ラベルの修正（アルファベット順、重複解消）
-        added_legends = set()
-        for trace in scatter.data:
-            if 'Class_abc' in df.columns and trace.name and trace.name in sorted_abc_classes:
-                legend_name = f"{trace.name}区分"
-                trace.name = legend_name
-                # 重複削除のため、既に追加済みの凡例は非表示
-                if legend_name in added_legends or i > 0:
-                    trace.showlegend = False
-                else:
-                    added_legends.add(legend_name)
-            elif not trace.name:  # 空の名前の場合はデフォルト名を設定
-                trace.name = "データ"
-                trace.showlegend = False
-            fig.add_trace(trace, row=1, col=i+1)
+        # ⑤ カスタムスケール適用
+        fig.update_xaxes(
+            title_text="誤差率", 
+            range=[x_min, x_max],
+            tickformat='+.0%',
+            dtick=0.5
+        )
         
-        # X軸に0の線を追加
-        fig.add_vline(x=0, line_dash="dash", line_color="gray", 
-                     row=1, col=i+1, annotation_text="完全一致")
-    
-    # レイアウト調整
-    fig.update_layout(
-        height=600,
-        showlegend=True,
-        title_text="誤差率散布図",  # タイトルを設定
-        title_font_size=16
-    )
-    
-    # ⑤ カスタムスケール適用
-    fig.update_xaxes(
-        title_text="誤差率", 
-        range=[x_min, x_max],
-        tickformat='+.0%',
-        dtick=0.5
-    )
-    
-    fig.update_yaxes(
-        title_text="予測・計画値",
-        range=[0, y_max]
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # 凡例による表示切替機能の周知
-    st.markdown(
-        '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
-        unsafe_allow_html=True
-    )
+        fig.update_yaxes(
+            title_text="予測・計画値",
+            range=[0, y_max]
+        )
+        
+        # グラフ表示（エラーハンドリング付き）
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 凡例による表示切替機能の周知
+        st.markdown(
+            '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
+            unsafe_allow_html=True
+        )
+        
+    except Exception as e:
+        st.error(f"❌ 散布図の作成でエラーが発生しました: {str(e)}")
+        st.info("💡 以下の方法をお試しください：\n- ブラウザの更新（Ctrl+F5）\n- 異なるブラウザでのアクセス\n- データの確認")
 
 def create_prediction_vs_actual_scatter(df, selected_predictions):
     """予測vs実績散布図を作成（⑥凡例修正）"""
@@ -331,90 +382,125 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
     # ② グラフタイトルを中項目見出しスタイルで表示
     st.markdown('<div class="step-title">📊 予測値 vs 実績値散布図</div>', unsafe_allow_html=True)
     
-    # サブプロット作成
-    fig = make_subplots(
-        rows=1, 
-        cols=len(selected_predictions),
-        subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
-    )
-    
-    # ⑥ 凡例用の区分を整理（アルファベット順）
-    all_abc_classes = set()
-    if 'Class_abc' in df.columns:
-        all_abc_classes = set(df['Class_abc'].dropna().unique())
-    
-    sorted_abc_classes = sorted(list(all_abc_classes))
-    
-    for i, pred_col in enumerate(selected_predictions):
-        # 色分け用の列を作成（ABC区分があれば使用）
+    try:
+        # データ検証
+        if df.empty:
+            st.warning("⚠️ 表示するデータがありません。")
+            return
+        
+        # サブプロット作成
+        fig = make_subplots(
+            rows=1, 
+            cols=len(selected_predictions),
+            subplot_titles=[get_prediction_name(pred) for pred in selected_predictions]
+        )
+        
+        # ⑥ 凡例用の区分を整理（アルファベット順）
+        all_abc_classes = set()
         if 'Class_abc' in df.columns:
-            color_col = 'Class_abc'
-            color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
-                                if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
-        else:
-            color_col = None
-            color_discrete_map = None
+            all_abc_classes = set(df['Class_abc'].dropna().unique())
         
-        # 散布図作成
-        scatter = px.scatter(
-            df,
-            x='Actual',
-            y=pred_col,
-            color=color_col,
-            color_discrete_map=color_discrete_map,
-            hover_data=['P_code', 'Date'],
-            title=f"{get_prediction_name(pred_col)} vs 実績"
-        )
+        sorted_abc_classes = sorted(list(all_abc_classes))
         
-        # ⑥ 凡例の表示順・ラベルの修正
-        added_legends = set()
-        for trace in scatter.data:
-            if 'Class_abc' in df.columns and trace.name and trace.name in sorted_abc_classes:
-                legend_name = f"{trace.name}区分"
-                trace.name = legend_name
-                if legend_name in added_legends or i > 0:
-                    trace.showlegend = False
+        for i, pred_col in enumerate(selected_predictions):
+            try:
+                # 予測カラムが存在するかチェック
+                if pred_col not in df.columns:
+                    st.warning(f"⚠️ カラム '{pred_col}' が見つかりません。")
+                    continue
+                
+                # データ検証：NaN、Inf値を除去
+                plot_data = df[['Actual', pred_col, 'P_code', 'Date'] + 
+                              (['Class_abc'] if 'Class_abc' in df.columns else [])].copy()
+                plot_data = plot_data.replace([np.inf, -np.inf], np.nan)
+                plot_data = plot_data.dropna(subset=['Actual', pred_col])
+                
+                if plot_data.empty:
+                    st.warning(f"⚠️ {get_prediction_name(pred_col)} の有効なデータがありません。")
+                    continue
+                
+                # 色分け用の列を作成（ABC区分があれば使用）
+                if 'Class_abc' in df.columns:
+                    color_col = 'Class_abc'
+                    color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
+                                        if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
                 else:
-                    added_legends.add(legend_name)
-            elif not trace.name:  # 空の名前の場合はデフォルト名を設定
-                trace.name = "データ"
-                trace.showlegend = False
-            fig.add_trace(trace, row=1, col=i+1)
+                    color_col = None
+                    color_discrete_map = None
+                
+                # 散布図作成（エラーハンドリング付き）
+                scatter = px.scatter(
+                    plot_data,
+                    x='Actual',
+                    y=pred_col,
+                    color=color_col,
+                    color_discrete_map=color_discrete_map,
+                    hover_data=['P_code', 'Date'],
+                    title=f"{get_prediction_name(pred_col)} vs 実績"
+                )
+                
+                # ⑥ 凡例の表示順・ラベルの修正
+                added_legends = set()
+                for trace in scatter.data:
+                    if 'Class_abc' in df.columns and trace.name and trace.name in sorted_abc_classes:
+                        legend_name = f"{trace.name}区分"
+                        trace.name = legend_name
+                        if legend_name in added_legends or i > 0:
+                            trace.showlegend = False
+                        else:
+                            added_legends.add(legend_name)
+                    elif not trace.name:  # 空の名前の場合はデフォルト名を設定
+                        trace.name = "データ"
+                        trace.showlegend = False
+                    fig.add_trace(trace, row=1, col=i+1)
+                
+                # 完全一致ライン（y=x）を追加
+                max_val = max(plot_data['Actual'].max(), plot_data[pred_col].max())
+                min_val = min(plot_data['Actual'].min(), plot_data[pred_col].min())
+                
+                # min_val, max_valが有効な値かチェック
+                if pd.isna(min_val) or pd.isna(max_val) or min_val == max_val:
+                    continue
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=[min_val, max_val], 
+                        y=[min_val, max_val],
+                        mode='lines',
+                        line=dict(color='red', dash='dash'),
+                        name='完全一致線',
+                        showlegend=(i == 0)  # 最初のサブプロットのみ凡例表示
+                    ),
+                    row=1, col=i+1
+                )
+                
+            except Exception as sub_error:
+                st.error(f"❌ {get_prediction_name(pred_col)} の散布図作成でエラー: {str(sub_error)}")
+                continue
         
-        # 完全一致ライン（y=x）を追加
-        max_val = max(df['Actual'].max(), df[pred_col].max())
-        min_val = min(df['Actual'].min(), df[pred_col].min())
-        
-        fig.add_trace(
-            go.Scatter(
-                x=[min_val, max_val], 
-                y=[min_val, max_val],
-                mode='lines',
-                line=dict(color='red', dash='dash'),
-                name='完全一致線',
-                showlegend=(i == 0)  # 最初のサブプロットのみ凡例表示
-            ),
-            row=1, col=i+1
+        # レイアウト調整
+        fig.update_layout(
+            height=600,
+            showlegend=True,
+            title_text="予測値 vs 実績値散布図",  # タイトルを設定
+            title_font_size=16
         )
-    
-    # レイアウト調整
-    fig.update_layout(
-        height=600,
-        showlegend=True,
-        title_text="予測値 vs 実績値散布図",  # タイトルを設定
-        title_font_size=16
-    )
-    
-    fig.update_xaxes(title_text="実績値")
-    fig.update_yaxes(title_text="予測・計画値")
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # 凡例による表示切替機能の周知
-    st.markdown(
-        '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
-        unsafe_allow_html=True
-    )
+        
+        fig.update_xaxes(title_text="実績値")
+        fig.update_yaxes(title_text="予測・計画値")
+        
+        # グラフ表示（エラーハンドリング付き）
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # 凡例による表示切替機能の周知
+        st.markdown(
+            '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
+            unsafe_allow_html=True
+        )
+        
+    except Exception as e:
+        st.error(f"❌ 散布図の作成でエラーが発生しました: {str(e)}")
+        st.info("💡 以下の方法をお試しください：\n- ブラウザの更新（Ctrl+F5）\n- 異なるブラウザでのアクセス\n- データの確認")
 
 def calculate_abc_average_errors(df, selected_predictions):
     """ABC区分別の加重平均誤差率を計算（全区分・3種誤差率対応）"""
@@ -621,7 +707,7 @@ def display_abc_average_table(abc_errors, filtered_df):
     # DataFrame作成
     df_table = pd.DataFrame(table_data, columns=multi_columns)
     
-    # カスタムCSS for 等幅列（1行目ヘッダー非表示）
+    # カスタムCSS for 調整済みカラム幅（1行目ヘッダー非表示）
     table_css = """
     <style>
     .stDataFrame > div {
@@ -632,11 +718,26 @@ def display_abc_average_table(abc_errors, filtered_df):
     }
     .stDataFrame th, .stDataFrame td {
         text-align: center !important;
-        width: 11.11% !important;  /* 9列なので各列約11% */
-        min-width: 80px !important;
     }
-    .stDataFrame th:first-child, .stDataFrame td:first-child {
-        width: 12% !important;  /* 区分列をやや広く */
+    /* 区分列：8% */
+    .stDataFrame th:nth-child(1), .stDataFrame td:nth-child(1) {
+        width: 8% !important;
+        min-width: 60px !important;
+    }
+    /* 件数列：8% */
+    .stDataFrame th:nth-child(2), .stDataFrame td:nth-child(2) {
+        width: 8% !important;
+        min-width: 60px !important;
+    }
+    /* 実績合計列：8% */
+    .stDataFrame th:nth-child(3), .stDataFrame td:nth-child(3) {
+        width: 8% !important;
+        min-width: 60px !important;
+    }
+    /* 残り6列（計画値01、計画値02、AI予測値のそれぞれ3種類）：各12.67% */
+    .stDataFrame th:nth-child(n+4), .stDataFrame td:nth-child(n+4) {
+        width: 12.67% !important;
+        min-width: 80px !important;
     }
     /* 1行目のヘッダー（MultiIndexの最上位レベル）を非表示 */
     .stDataFrame thead tr:first-child {

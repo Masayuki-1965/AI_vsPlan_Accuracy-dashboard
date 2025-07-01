@@ -60,7 +60,7 @@ def show():
     # ① 大項目デザイン修正（データセット作成と同じ階層の見出しスタイル）
     st.markdown("""
     <div class="section-header-box">
-        <h2>📈 散布図分析</h2>
+        <h2>■ 散布図分析</h2>
         <p>このセクションでは、分類単位でABC区分別の誤差率を多角的に分析・可視化し、各区分における誤差の傾向や特徴を明らかにします。</p>
     </div>
     """, unsafe_allow_html=True)
@@ -95,7 +95,7 @@ def show():
     
     with col1:
         plot_type = st.selectbox(
-            "📊 グラフタイプ",
+            "グラフタイプ",
             ['誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）', '予測値 vs 実績値散布図'],
             key="plot_type_selector"
         )
@@ -109,7 +109,7 @@ def show():
         default_selections = prediction_columns
         
         selected_predictions = st.multiselect(
-            "🎯 表示する予測・計画",
+            "表示する予測・計画",
             prediction_columns,
             default=default_selections,
             format_func=get_prediction_name,
@@ -198,13 +198,13 @@ def apply_filters(df):
         with col1:
             # 分類フィルター（初期値：全て）
             category_options = ['全て'] + sorted(df['category_code'].dropna().unique().tolist())
-            selected_category = st.selectbox("🏷️ 分類", category_options, key="category_filter")
+            selected_category = st.selectbox("分類", category_options, key="category_filter")
         
         with col2:
             # 期間フィルター（初期値：全期間）
             if 'Date' in df.columns:
                 date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
-                selected_date = st.selectbox("📅 期間", date_options, key="date_filter")
+                selected_date = st.selectbox("期間", date_options, key="date_filter")
             else:
                 selected_date = '全期間'
     else:
@@ -214,7 +214,7 @@ def apply_filters(df):
         # 期間フィルター（初期値：全期間）
         if 'Date' in df.columns:
             date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
-            selected_date = st.selectbox("📅 期間", date_options, key="date_filter")
+            selected_date = st.selectbox("期間", date_options, key="date_filter")
         else:
             selected_date = '全期間'
     
@@ -272,7 +272,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
     """誤差率散布図を作成（⑤スケール調整対応、⑥凡例修正）"""
     
     # ② グラフタイトルを中項目見出しスタイルで表示
-    st.markdown('<div class="step-title">📊 誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-title">誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）</div>', unsafe_allow_html=True)
     
     # ③ 説明文追加
     st.markdown(
@@ -399,7 +399,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
         
         # 凡例による表示切替機能の周知
         st.markdown(
-            '<div class="step-annotation">💡 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
+            '<div class="step-annotation">※ 凡例項目をクリックすると、該当する区分の表示/非表示を切り替えできます。</div>',
             unsafe_allow_html=True
         )
         
@@ -411,7 +411,7 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
     """予測vs実績散布図を作成（⑥凡例修正）"""
     
     # ② グラフタイトルを中項目見出しスタイルで表示
-    st.markdown('<div class="step-title">📊 予測値 vs 実績値散布図</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-title">予測値 vs 実績値散布図</div>', unsafe_allow_html=True)
     
     # ④ 説明文追加
     st.markdown(
@@ -602,7 +602,7 @@ def display_abc_average_table(abc_errors, filtered_df):
         return
     
     # ② 中項目見出し（STEP見出しスタイル統一）
-    st.markdown('<div class="step-title">📊 ABC区分別 加重平均誤差率</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-title">ABC区分別 加重平均誤差率</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="step-annotation">ABC区分別の加重平均誤差率として、「絶対誤差率」、「負の誤差率（＝欠品リスク）」、「正の誤差率（＝過剰在庫リスク）」を表示します。</div>',
         unsafe_allow_html=True

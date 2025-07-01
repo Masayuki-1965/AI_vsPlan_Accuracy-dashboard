@@ -117,7 +117,7 @@ def show():
             margin: 0 0 0.2rem 0;
             font-weight: 600;
             color: #1976d2;
-        ">🛠️ データセット作成</h2>
+        ">■ データセット作成</h2>
         <p style="
             font-size: 1.05rem;
             margin: 0;
@@ -261,10 +261,10 @@ def show_step2():
     
     # 任意項目についての説明
     st.markdown("---")
-    st.markdown('<div class="step-annotation">※任意項目について：詳細分析を行う場合は「分類」の設定を、既にABC区分を設定済みの場合は「ABC区分」をマッピングしてください。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">※ 任意項目について：詳細分析を行う場合は「分類」の設定を、既にABC区分を設定済みの場合は「ABC区分」をマッピングしてください。</div>', unsafe_allow_html=True)
     
     # 項目名変更機能の追加
-    with st.expander("📝 項目名カスタマイズ（任意）"):
+    with st.expander("項目名カスタマイズ（任意）"):
         st.markdown('<div class="step-annotation">「計画値01」「計画値02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。</div>', unsafe_allow_html=True)
         
         col_custom1, col_custom2, col_custom3 = st.columns(3)
@@ -305,7 +305,7 @@ def show_step2():
             try:
                 # データマッピング実行
                 with st.status("🔄 データマッピング実行中...", expanded=True) as status:
-                    st.write("📊 カラム名を変換中...")
+                    st.write("カラム名を変換中...")
                     
                     mapped_df = apply_mapping(st.session_state.original_data, mapping)
                     
@@ -369,7 +369,7 @@ def show_step3():
         # 補正実行
         try:
             with st.status("🔄 月別合計値補正を実行中...", expanded=True) as status:
-                st.write("📊 分類ごとの月別合計値を分析中...")
+                st.write("分類ごとの月別合計値を分析中...")
                 
                 corrected_df = apply_monthly_correction(st.session_state.data)
                 st.session_state.data = corrected_df
@@ -488,7 +488,7 @@ def show_step3():
 def show_step4():
     """STEP 4: ABC区分自動生成"""
     st.markdown('<div class="step-title">ABC区分自動生成</div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-annotation">ABC区分を自動生成するか、既存を使用するかを選択してください。※一部分類のみを対象とした自動生成も可能です。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">ABC区分を自動生成するか、既存を使用するかを選択してください。※ 一部分類のみを対象とした自動生成も可能です。</div>', unsafe_allow_html=True)
     
     # ABC区分生成の選択肢（排他制御に変更）
     col1, col2 = st.columns(2)
@@ -527,7 +527,7 @@ def show_step4():
             current_selection = st.session_state.selected_generation_categories if hasattr(st.session_state, 'selected_generation_categories') else []
             
             selected_categories = st.multiselect(
-                "「分類」フィルター（※複数選択可）",
+                "「分類」フィルター（※ 複数選択可）",
                 category_options,
                 default=current_selection if current_selection else ['全て']
             )
@@ -1157,7 +1157,7 @@ def execute_abc_generation_process():
     """ABC区分自動生成処理の実行"""
     try:
         with st.status("🔄 ABC区分を自動生成中...", expanded=True) as status:
-            st.write("📊 実績値データを分析中...")
+            st.write("実績値データを分析中...")
             
             # 区分設定の妥当性チェック
             if st.session_state.abc_setting_mode == 'ratio':

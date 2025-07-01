@@ -125,6 +125,22 @@ def show():
     # デフォルト値の計算（分類ごとに最適化）
     default_y_max = get_optimal_y_max(filtered_df, selected_predictions)
     
+    # 分類フィルターの値を取得（キー生成のため）
+    current_category = st.session_state.get('category_filter', '全て')
+    current_date = st.session_state.get('date_filter', '全期間')
+    filter_key = f"{current_category}_{current_date}"
+    
+    # 前回の分類フィルター値を記録・比較
+    previous_filter_key = st.session_state.get('previous_filter_key', '')
+    if previous_filter_key != filter_key:
+        # 分類フィルターが変更された場合、古いキーの値をクリア
+        st.session_state['previous_filter_key'] = filter_key
+        # 既存の軸スケール設定をリセット
+        for key in list(st.session_state.keys()):
+            if key.startswith('x_min_scatter_') or key.startswith('x_max_scatter_') or key.startswith('y_max_scatter_'):
+                if key != f"x_min_scatter_{filter_key}" and key != f"x_max_scatter_{filter_key}" and key != f"y_max_scatter_{filter_key}":
+                    del st.session_state[key]
+    
     # 軸スケール設定UI（見出しなし、グラフ前に配置）
     col1, col2, col3 = st.columns(3)
     
@@ -134,7 +150,7 @@ def show():
             value=-100,
             step=10,
             format="%d",
-            key="x_min_scatter_main"
+            key=f"x_min_scatter_{filter_key}"
         )
     
     with col2:
@@ -143,16 +159,25 @@ def show():
             value=200,
             step=10,
             format="%d",
-            key="x_max_scatter_main"
+            key=f"x_max_scatter_{filter_key}"
         )
     
     with col3:
+        # 分類変更時に縦軸最大値を自動最適化
+        current_y_max = default_y_max
+        
+        # 前回と同じフィルターで、かつユーザーが手動調整済みの場合のみ保持
+        if (previous_filter_key == filter_key and 
+            f"y_max_scatter_{filter_key}" in st.session_state and
+            st.session_state[f"y_max_scatter_{filter_key}"] != default_y_max):
+            current_y_max = st.session_state[f"y_max_scatter_{filter_key}"]
+        
         y_max_input = st.number_input(
             "縦軸最大値",
-            value=default_y_max,
+            value=current_y_max,
             step=100,
             format="%d",
-            key="y_max_scatter_main"
+            key=f"y_max_scatter_{filter_key}"
         )
 
     # 散布図作成・表示
@@ -248,6 +273,12 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
     
     # ② グラフタイトルを中項目見出しスタイルで表示
     st.markdown('<div class="step-title">📊 誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）</div>', unsafe_allow_html=True)
+    
+    # ③ 説明文追加
+    st.markdown(
+        '<div class="step-annotation">各区分の誤差率を商品コード単位で可視化し、「絶対誤差率」「負の誤差率（欠品リスク）」「正の誤差率（過剰在庫リスク）」を表示します。</div>',
+        unsafe_allow_html=True
+    )
     
     try:
         # データ検証
@@ -347,9 +378,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
         # レイアウト調整
         fig.update_layout(
             height=600,
-            showlegend=True,
-            title_text="誤差率散布図",  # タイトルを設定
-            title_font_size=16
+            showlegend=True
         )
         
         # ⑤ カスタムスケール適用
@@ -361,7 +390,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
         )
         
         fig.update_yaxes(
-            title_text="予測・計画値",
+            title_text="計画値",
             range=[0, y_max]
         )
         
@@ -383,6 +412,12 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
     
     # ② グラフタイトルを中項目見出しスタイルで表示
     st.markdown('<div class="step-title">📊 予測値 vs 実績値散布図</div>', unsafe_allow_html=True)
+    
+    # ④ 説明文追加
+    st.markdown(
+        '<div class="step-annotation">各区分の予測精度を商品コード単位で可視化し、実績値に対する計画値の妥当性を確認します（破線は完全一致ラインを示します）。</div>',
+        unsafe_allow_html=True
+    )
     
     try:
         # データ検証
@@ -487,13 +522,11 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
         # レイアウト調整
         fig.update_layout(
             height=600,
-            showlegend=True,
-            title_text="予測値 vs 実績値散布図",  # タイトルを設定
-            title_font_size=16
+            showlegend=True
         )
         
         fig.update_xaxes(title_text="実績値")
-        fig.update_yaxes(title_text="予測・計画値")
+        fig.update_yaxes(title_text="計画値")
         
         # グラフ表示（エラーハンドリング付き）
         st.plotly_chart(fig, use_container_width=True)
@@ -571,7 +604,7 @@ def display_abc_average_table(abc_errors, filtered_df):
     # ② 中項目見出し（STEP見出しスタイル統一）
     st.markdown('<div class="step-title">📊 ABC区分別 加重平均誤差率</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="step-annotation">誤差傾向の散布図分析における前提情報として、区分別の加重平均誤差率（絶対値・負方向・正方向）を表示</div>',
+        '<div class="step-annotation">ABC区分別の加重平均誤差率として、「絶対誤差率」、「負の誤差率（＝欠品リスク）」、「正の誤差率（＝過剰在庫リスク）」を表示します。</div>',
         unsafe_allow_html=True
     )
     

@@ -121,14 +121,12 @@ def show():
     if not selected_predictions:
         st.warning("⚠️ 表示する予測・計画を選択してください。")
         return
-    
-    # ⑤ 横軸・縦軸のスケール調整UIを前面表示
-    st.markdown('<div class="step-title">⚙️ 軸スケール設定</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    
+
     # デフォルト値の計算（分類ごとに最適化）
     default_y_max = get_optimal_y_max(filtered_df, selected_predictions)
+    
+    # 軸スケール設定UI（見出しなし、グラフ前に配置）
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         x_min_input = st.number_input(
@@ -156,7 +154,7 @@ def show():
             format="%d",
             key="y_max_scatter_main"
         )
-    
+
     # 散布図作成・表示
     if plot_type == '誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）':
         create_error_rate_scatter(filtered_df, selected_predictions, x_min_input/100, x_max_input/100, y_max_input)
@@ -209,22 +207,22 @@ def apply_filters(df):
     return filtered_df
 
 def get_prediction_name(pred_type):
-    """予測タイプの表示名を取得（カスタム項目名対応・6文字省略対応）"""
+    """予測タイプの表示名を取得（カスタム項目名対応・10文字省略対応）"""
     # カスタム項目名があるかチェック
     if 'custom_column_names' in st.session_state and pred_type in st.session_state.custom_column_names:
         custom_name = st.session_state.custom_column_names[pred_type].strip()
         if custom_name:
-            # 全角6文字を超える場合は省略
-            if len(custom_name) > 6:
-                return custom_name[:6] + '…'
+            # 全角10文字を超える場合は省略
+            if len(custom_name) > 10:
+                return custom_name[:10] + '…'
             else:
                 return custom_name
     
     # デフォルト名を取得
     default_name = PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
-    # デフォルト名も6文字チェック
-    if len(default_name) > 6:
-        return default_name[:6] + '…'
+    # デフォルト名も10文字チェック
+    if len(default_name) > 10:
+        return default_name[:10] + '…'
     else:
         return default_name
 
@@ -303,9 +301,12 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
                     # ABC区分カラーを統一パレットから取得
                     color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
                                         if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
+                    # ② 凡例をアルファベット順に表示するためのcategory_orders
+                    category_orders = {color_col: sorted_abc_classes}
                 else:
                     color_col = None
                     color_discrete_map = None
+                    category_orders = None
                 
                 # 散布図作成（エラーハンドリング付き）
                 scatter = px.scatter(
@@ -314,6 +315,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
                     y=pred_col,
                     color=color_col,
                     color_discrete_map=color_discrete_map,
+                    category_orders=category_orders,
                     hover_data=['P_code', 'Actual', pred_col, 'absolute_error_rate'],
                     title=f"{get_prediction_name(pred_col)}"
                 )
@@ -424,9 +426,12 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
                     color_col = 'Class_abc'
                     color_discrete_map = {k: v for k, v in UNIFIED_COLOR_PALETTE.items() 
                                         if k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'Z']}
+                    # ② 凡例をアルファベット順に表示するためのcategory_orders
+                    category_orders = {color_col: sorted_abc_classes}
                 else:
                     color_col = None
                     color_discrete_map = None
+                    category_orders = None
                 
                 # 散布図作成（エラーハンドリング付き）
                 scatter = px.scatter(
@@ -435,6 +440,7 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
                     y=pred_col,
                     color=color_col,
                     color_discrete_map=color_discrete_map,
+                    category_orders=category_orders,
                     hover_data=['P_code', 'Date'],
                     title=f"{get_prediction_name(pred_col)} vs 実績"
                 )

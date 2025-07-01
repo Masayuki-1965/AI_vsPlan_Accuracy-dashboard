@@ -60,13 +60,14 @@ def calculate_weighted_average_error_rate(df, error_rate_column, weight_column):
     
     return weighted_sum / weight_sum
 
-def categorize_error_rates(df, error_rate_column):
+def categorize_error_rates(df, error_rate_column, error_type='absolute'):
     """
     誤差率を区分に分類（新仕様対応）
     
     Parameters:
     df: DataFrame - データフレーム
     error_rate_column: str - 誤差率カラム名
+    error_type: str - 誤差率タイプ ('absolute', 'positive', 'negative')
     
     Returns:
     Series - 誤差率区分
@@ -82,17 +83,29 @@ def categorize_error_rates(df, error_rate_column):
     # 実績がゼロでない場合のみ誤差率で分類
     valid_mask = ~is_actual_zero
     if valid_mask.any():
-        error_rates = df.loc[valid_mask, error_rate_column].fillna(0).abs()
+        error_rates = df.loc[valid_mask, error_rate_column].fillna(0)
+        
+        # 誤差率タイプに応じた処理
+        if error_type == 'absolute':
+            error_rates = error_rates.abs()
+        elif error_type == 'positive':
+            # 正の誤差率：計画値 > 実績値の場合のみ
+            error_rates = error_rates.where(error_rates >= 0, np.nan)
+        elif error_type == 'negative':
+            # 負の誤差率：計画値 < 実績値の場合のみ（絶対値にする）
+            error_rates = error_rates.where(error_rates < 0, np.nan).abs()
         
         conditions = []
         choices = []
         
-        for category in ERROR_RATE_CATEGORIES:
+        categories = ERROR_RATE_CATEGORIES.get(error_type, ERROR_RATE_CATEGORIES['absolute'])
+        
+        for category in categories:
             if 'special' not in category:  # 通常の誤差率区分
                 min_val = category['min']
                 max_val = category['max']
                 if max_val == float('inf'):
-                    condition = error_rates > min_val
+                    condition = error_rates >= min_val
                 else:
                     condition = (error_rates >= min_val) & (error_rates < max_val)
                 conditions.append(condition)
@@ -120,7 +133,7 @@ def create_error_matrix(df, group_columns=None):
     
     # 誤差率区分を追加
     df_with_category = df.copy()
-    df_with_category['abs_error_category'] = categorize_error_rates(df, 'absolute_error_rate')
+    df_with_category['abs_error_category'] = categorize_error_rates(df, 'absolute_error_rate', 'absolute')
     
     # グループ化
     group_cols = group_columns + ['abs_error_category']

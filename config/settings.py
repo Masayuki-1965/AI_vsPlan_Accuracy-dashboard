@@ -52,15 +52,35 @@ ABC_CLASSIFICATION_SETTINGS = {
 }
 
 # 誤差率区分設定（新仕様）
-ERROR_RATE_CATEGORIES = [
-    {'min': 0.0, 'max': 0.1, 'label': '0 - 10%'},
-    {'min': 0.1, 'max': 0.2, 'label': '10 - 20%'},
-    {'min': 0.2, 'max': 0.3, 'label': '20 - 30%'},
-    {'min': 0.3, 'max': 0.5, 'label': '30 - 50%'},
-    {'min': 0.5, 'max': 1.0, 'label': '50 - 100%'},
-    {'min': 1.0, 'max': float('inf'), 'label': '100%以上'},
-    {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
-]
+ERROR_RATE_CATEGORIES = {
+    'absolute': [
+        {'min': 0.0, 'max': 0.1, 'label': '0〜10%'},
+        {'min': 0.1, 'max': 0.2, 'label': '10〜20%'},
+        {'min': 0.2, 'max': 0.3, 'label': '20〜30%'},
+        {'min': 0.3, 'max': 0.5, 'label': '30〜50%'},
+        {'min': 0.5, 'max': 1.0, 'label': '50〜100%'},
+        {'min': 1.0, 'max': float('inf'), 'label': '100%以上'},
+        {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
+    ],
+    'positive': [
+        {'min': 0.0, 'max': 0.1, 'label': '＋0〜10%'},
+        {'min': 0.1, 'max': 0.2, 'label': '＋10〜20%'},
+        {'min': 0.2, 'max': 0.3, 'label': '＋20〜30%'},
+        {'min': 0.3, 'max': 0.5, 'label': '＋30〜50%'},
+        {'min': 0.5, 'max': 1.0, 'label': '＋50〜100%'},
+        {'min': 1.0, 'max': float('inf'), 'label': '＋100%超'},
+        {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
+    ],
+    'negative': [
+        {'min': 0.0, 'max': 0.1, 'label': '▲0〜10%'},
+        {'min': 0.1, 'max': 0.2, 'label': '▲10〜20%'},
+        {'min': 0.2, 'max': 0.3, 'label': '▲20〜30%'},
+        {'min': 0.3, 'max': 0.5, 'label': '▲30〜50%'},
+        {'min': 0.5, 'max': 1.0, 'label': '▲50〜100%'},
+        {'min': 1.0, 'max': float('inf'), 'label': '▲100%超'},
+        {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
+    ]
+}
 
 # マトリクス表示設定
 MATRIX_DISPLAY_SETTINGS = {

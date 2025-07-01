@@ -13,7 +13,7 @@ from config.ui_styles import HELP_TEXTS, MATRIX_EXPLANATION, ERROR_RATE_DEFINITI
 from config.constants import PREDICTION_TYPE_NAMES
 
 def show():
-    """誤差率評価マトリクスページを表示"""
+    """誤差率帯別マトリクスページを表示"""
     # CSSスタイル（散布図分析と同様）の適用
     st.markdown("""
     <style>
@@ -87,7 +87,7 @@ def show():
     # ① セクション名のデザイン統一
     st.markdown("""
     <div class="section-header-box">
-        <h2>■ 誤差率評価マトリクス（誤差率帯 × ABC区分 × 計画種別）</h2>
+        <h2>■ 誤差率帯別マトリクス（ABC区分 × 計画種別）</h2>
         <p>このセクションでは、商品コード単位の誤差率を誤差率帯に分類し、ABC区分および計画種別ごとの分布を分類単位でマトリクス形式に可視化します。誤差傾向の把握や、欠品・過剰在庫リスクの分析に活用できます。</p>
     </div>
     """, unsafe_allow_html=True)
@@ -107,11 +107,11 @@ def show():
             st.warning("⚠️ フィルター条件に該当するデータがありません。")
             return
         
-        st.info(f"フィルター後データ件数: {len(filtered_df)}件")
+
         
         # ③ グラフタイトルと補足説明の追加
         st.markdown("""
-        <div class="step-title">誤差率評価マトリクス</div>
+        <div class="step-title">誤差率帯別マトリクス（ABC区分 × 計画種別）</div>
         """, unsafe_allow_html=True)
         
         st.markdown("""
@@ -123,7 +123,7 @@ def show():
         # ④ 誤差率タイプフィルターの配置と定義の表示
         error_type_selection = create_error_type_filter()
         
-        # ⑤ 誤差率マトリクス表示（すべての計画値・ABC区分を同時表示）
+        # ⑤ 誤差率帯別マトリクス表示（すべての計画値・ABC区分を同時表示）
         display_comprehensive_error_rate_matrix(filtered_df, error_type_selection)
         
     except Exception as e:
@@ -196,15 +196,15 @@ def create_error_type_filter():
     error_types = {
         '絶対誤差率': {
             'value': 'absolute',
-            'definition': '|計画値 − 実績値| ÷ 実績値'
+            'definition': '｜計画値 − 実績値｜ ÷ 実績値'
         },
         '正の誤差率': {
             'value': 'positive', 
-            'definition': '(計画値 − 実績値) ÷ 実績値 ※計画値 ＞ 実績値（過剰在庫リスク）'
+            'definition': '（計画値 − 実績値）÷ 実績値　※計画値 ＞ 実績値（過剰在庫リスク）'
         },
         '負の誤差率': {
             'value': 'negative',
-            'definition': '(計画値 − 実績値) ÷ 実績値 ※計画値 ＜ 実績値（欠品リスク）'
+            'definition': '（計画値 − 実績値）÷ 実績値　※計画値 ＜ 実績値（欠品リスク）'
         }
     }
     
@@ -219,45 +219,39 @@ def create_error_type_filter():
         )
     
     with col2:
-        # 選択された誤差率タイプの定義を横に表示
+        # 選択された誤差率タイプの定義をシンプルに表示
         st.markdown(f"""
         <div style="
-            background: #f8f9fa;
-            border-left: 4px solid #17a2b8;
             padding: 0.8rem 1rem;
             margin-top: 1.7rem;
-            border-radius: 0 8px 8px 0;
             font-size: 0.9rem;
         ">
-            <strong>{selected_error_type}：</strong> {error_types[selected_error_type]['definition']}
+            <strong>{selected_error_type}の定義式：</strong> {error_types[selected_error_type]['definition']}
         </div>
         """, unsafe_allow_html=True)
     
     return error_types[selected_error_type]['value']
 
 def display_comprehensive_error_rate_matrix(df, error_type):
-    """⑤ 包括的誤差率マトリクス表示（段階的復元版）"""
+    """⑤ 包括的誤差率帯別マトリクス表示（段階的復元版）"""
     try:
         # 利用可能な計画値を確認
         plan_columns = ['Plan_01']
         if 'Plan_02' in df.columns:
             plan_columns.append('Plan_02')
         
-        # 利用可能なABC区分を確認
+        # 利用可能なABC区分を確認（⑥ ABC区分の拡張表示）
         abc_categories = []
         if 'Class_abc' in df.columns:
             abc_values = sorted(df['Class_abc'].dropna().unique().tolist())
             # A, B, C区分を優先的に表示
             priority_categories = ['A', 'B', 'C']
             abc_categories = [cat for cat in priority_categories if cat in abc_values]
-            # 他の区分も追加（最大3つまで）
+            # D区分、E区分なども全て表示
             other_categories = [cat for cat in abc_values if cat not in priority_categories]
-            abc_categories.extend(other_categories[:3-len(abc_categories)])
+            abc_categories.extend(other_categories)
         
-        st.write(f"📊 選択された誤差率タイプ: {error_type}")
-        st.write(f"📊 データ件数: {len(df)}件")
-        st.write(f"📊 計画値: {', '.join(plan_columns)}")
-        st.write(f"📊 ABC区分: {', '.join(abc_categories) if abc_categories else 'なし'}")
+
         
         # AI予測と各計画値の誤差率計算
         error_data = {}
@@ -281,6 +275,8 @@ def display_comprehensive_error_rate_matrix(df, error_type):
 
 def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
     """基本的なマトリクス作成（段階的復元）"""
+    from utils.error_calculator import categorize_error_rates, calculate_weighted_average_error_rate
+    
     # 誤差率カラム選択
     if error_type == 'absolute':
         error_col = 'absolute_error_rate'
@@ -290,15 +286,15 @@ def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
         error_col = 'negative_error_rate'
     
     # 誤差率区分追加
-    error_data['AI_pred']['error_category'] = categorize_error_rates(error_data['AI_pred'], error_col)
+    error_data['AI_pred']['error_category'] = categorize_error_rates(error_data['AI_pred'], error_col, error_type)
     for plan_col in plan_columns:
-        error_data[plan_col]['error_category'] = categorize_error_rates(error_data[plan_col], error_col)
+        error_data[plan_col]['error_category'] = categorize_error_rates(error_data[plan_col], error_col, error_type)
     
     # 誤差率帯の順序定義
-    error_bands_original = [cat['label'] for cat in ERROR_RATE_CATEGORIES]
+    error_bands_original = [cat['label'] for cat in ERROR_RATE_CATEGORIES[error_type]]
     
     # 基本的なマトリクス構造（合計のみ）
-    columns = ['AI予測'] + [get_plan_name(plan_col) for plan_col in plan_columns]
+    columns = [get_plan_name('AI_pred')] + [get_plan_name(plan_col) for plan_col in plan_columns]
     
     # データフレーム初期化
     matrix_data = []
@@ -325,13 +321,32 @@ def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
         total_row_data.append(len(error_data[plan_col]))
     matrix_data.append(total_row_data)
     
+    # 加重平均誤差率行の追加
+    weighted_avg_row_data = []
+    
+    # AI予測の加重平均誤差率
+    ai_weighted_avg = calculate_weighted_average_error_rate(error_data['AI_pred'], error_col, 'Actual')
+    ai_weighted_avg_str = format_weighted_average(ai_weighted_avg, error_type)
+    weighted_avg_row_data.append(ai_weighted_avg_str)
+    
+    # 各計画値の加重平均誤差率
+    for plan_col in plan_columns:
+        plan_weighted_avg = calculate_weighted_average_error_rate(error_data[plan_col], error_col, 'Actual')
+        plan_weighted_avg_str = format_weighted_average(plan_weighted_avg, error_type)
+        weighted_avg_row_data.append(plan_weighted_avg_str)
+    
+    matrix_data.append(weighted_avg_row_data)
+    
     # DataFrame作成（最初から文字列で統一）
-    index_labels = error_bands_original + ['合計（件数）']
+    index_labels = error_bands_original + ['合計（件数）', '加重平均誤差率']
     
     # 数値データを文字列に変換してからDataFrame作成
     matrix_data_str = []
-    for row in matrix_data:
-        str_row = [str(int(val)) if isinstance(val, (int, float)) and not pd.isna(val) else str(val) for val in row]
+    for i, row in enumerate(matrix_data):
+        if i < len(matrix_data) - 1:  # 加重平均行以外
+            str_row = [str(int(val)) if isinstance(val, (int, float)) and not pd.isna(val) else str(val) for val in row]
+        else:  # 加重平均行はそのまま
+            str_row = row
         matrix_data_str.append(str_row)
     
     matrix_df = pd.DataFrame(matrix_data_str, index=index_labels, columns=columns, dtype=str)
@@ -341,14 +356,22 @@ def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
 
 def display_basic_matrix(matrix_df):
     """基本的なマトリクス表示"""
-    st.write("### 誤差率分布マトリクス（基本版）")
     st.dataframe(
         matrix_df,
         use_container_width=True
     )
+    
+    # ③ 注釈の追加
+    st.markdown("""
+    <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。
+    </div>
+    """, unsafe_allow_html=True)
 
 def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns):
     """高度なマトリクス作成（ABC区分別対応、2段ヘッダー）"""
+    from utils.error_calculator import categorize_error_rates, calculate_weighted_average_error_rate
+    
     # 誤差率カラム選択
     if error_type == 'absolute':
         error_col = 'absolute_error_rate'
@@ -358,16 +381,16 @@ def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns)
         error_col = 'negative_error_rate'
     
     # 誤差率区分追加
-    error_data['AI_pred']['error_category'] = categorize_error_rates(error_data['AI_pred'], error_col)
+    error_data['AI_pred']['error_category'] = categorize_error_rates(error_data['AI_pred'], error_col, error_type)
     for plan_col in plan_columns:
-        error_data[plan_col]['error_category'] = categorize_error_rates(error_data[plan_col], error_col)
+        error_data[plan_col]['error_category'] = categorize_error_rates(error_data[plan_col], error_col, error_type)
     
     # 誤差率帯の順序定義
-    error_bands_original = [cat['label'] for cat in ERROR_RATE_CATEGORIES]
+    error_bands_original = [cat['label'] for cat in ERROR_RATE_CATEGORIES[error_type]]
     
     # 2段ヘッダーの構造定義
     categories = ['合計'] + [f'{abc}区分' for abc in abc_categories]
-    subcategories = ['AI予測'] + [get_plan_name(plan_col) for plan_col in plan_columns]
+    subcategories = [get_plan_name('AI_pred')] + [get_plan_name(plan_col) for plan_col in plan_columns]
     
     # MultiIndex作成
     columns_tuples = []
@@ -428,13 +451,46 @@ def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns)
     
     matrix_data.append(total_row_data)
     
+    # 加重平均誤差率行の追加
+    weighted_avg_row_data = []
+    
+    # 合計の加重平均誤差率
+    ai_weighted_avg = calculate_weighted_average_error_rate(error_data['AI_pred'], error_col, 'Actual')
+    ai_weighted_avg_str = format_weighted_average(ai_weighted_avg, error_type)
+    weighted_avg_row_data.append(ai_weighted_avg_str)
+    
+    for plan_col in plan_columns:
+        plan_weighted_avg = calculate_weighted_average_error_rate(error_data[plan_col], error_col, 'Actual')
+        plan_weighted_avg_str = format_weighted_average(plan_weighted_avg, error_type)
+        weighted_avg_row_data.append(plan_weighted_avg_str)
+    
+    # ABC区分別の加重平均誤差率
+    for abc in abc_categories:
+        # AI予測のABC区分別加重平均
+        ai_abc_data = error_data['AI_pred'][error_data['AI_pred']['Class_abc'] == abc]
+        ai_abc_weighted_avg = calculate_weighted_average_error_rate(ai_abc_data, error_col, 'Actual')
+        ai_abc_weighted_avg_str = format_weighted_average(ai_abc_weighted_avg, error_type)
+        weighted_avg_row_data.append(ai_abc_weighted_avg_str)
+        
+        # 各計画値のABC区分別加重平均
+        for plan_col in plan_columns:
+            plan_abc_data = error_data[plan_col][error_data[plan_col]['Class_abc'] == abc]
+            plan_abc_weighted_avg = calculate_weighted_average_error_rate(plan_abc_data, error_col, 'Actual')
+            plan_abc_weighted_avg_str = format_weighted_average(plan_abc_weighted_avg, error_type)
+            weighted_avg_row_data.append(plan_abc_weighted_avg_str)
+    
+    matrix_data.append(weighted_avg_row_data)
+    
     # DataFrame作成（最初から文字列で統一）
-    index_labels = error_bands_original + ['合計（件数）']
+    index_labels = error_bands_original + ['合計（件数）', '加重平均誤差率']
     
     # 数値データを文字列に変換してからDataFrame作成
     matrix_data_str = []
-    for row in matrix_data:
-        str_row = [str(int(val)) if isinstance(val, (int, float)) and not pd.isna(val) else str(val) for val in row]
+    for i, row in enumerate(matrix_data):
+        if i < len(matrix_data) - 1:  # 加重平均行以外
+            str_row = [str(int(val)) if isinstance(val, (int, float)) and not pd.isna(val) else str(val) for val in row]
+        else:  # 加重平均行はそのまま
+            str_row = row
         matrix_data_str.append(str_row)
     
     matrix_df = pd.DataFrame(matrix_data_str, index=index_labels, columns=multi_index, dtype=str)
@@ -444,19 +500,47 @@ def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns)
 
 def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
     """高度なマトリクス表示（2段ヘッダー対応）"""
-    st.write("### 誤差率分布マトリクス（ABC区分別）")
-    
     # データは既に文字列形式なので、そのまま表示
     st.dataframe(
         matrix_df,
         use_container_width=True
     )
+    
+    # ③ 注釈の追加
+    st.markdown("""
+    <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
+    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。
+    </div>
+    """, unsafe_allow_html=True)
 
 def get_plan_name(plan_col):
-    """計画カラム名を表示用に変換"""
+    """計画カラム名を表示用に変換（省略表示対応）"""
     if plan_col == 'Plan_01':
-        return '計画01'
+        display_name = '計画01'
     elif plan_col == 'Plan_02':
-        return '計画02'
+        display_name = '計画02'
+    elif plan_col == 'AI_pred':
+        display_name = 'AI予測'
     else:
-        return plan_col 
+        display_name = plan_col
+    
+    # 全角5文字を超える場合は省略表示
+    if len(display_name) > 5:
+        return display_name[:4] + '…'
+    return display_name
+
+def format_weighted_average(weighted_avg, error_type):
+    """加重平均誤差率のフォーマット（要望①に対応）"""
+    if pd.isna(weighted_avg):
+        return '-'
+    
+    # パーセント表示に変換
+    percentage = weighted_avg * 100
+    
+    # 誤差率タイプに応じた記号付け
+    if error_type == 'positive':
+        return f"＋{percentage:.0f}%"
+    elif error_type == 'negative':
+        return f"▲{percentage:.0f}%"
+    else:  # absolute
+        return f"{percentage:.0f}%" 

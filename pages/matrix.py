@@ -581,17 +581,17 @@ def get_plan_name(plan_col):
     return display_name
 
 def format_weighted_average(weighted_avg, error_type):
-    """加重平均誤差率のフォーマット（要望①に対応）"""
+    """加重平均誤差率のフォーマット（小数第1位統一・負の誤差率表記統一）"""
     if pd.isna(weighted_avg):
         return '-'
     
     # パーセント表示に変換
     percentage = weighted_avg * 100
     
-    # 誤差率タイプに応じた記号付け
+    # 誤差率タイプに応じた記号付け（小数第1位統一）
     if error_type == 'positive':
-        return f"＋{percentage:.0f}%"
+        return f"＋{percentage:.1f}%"
     elif error_type == 'negative':
-        return f"▲{percentage:.0f}%"
+        return f"▲{abs(percentage):.1f}%"  # 負の値を正の値に変換してから▲記号を付ける
     else:  # absolute
-        return f"{percentage:.0f}%" 
+        return f"{percentage:.1f}%" 

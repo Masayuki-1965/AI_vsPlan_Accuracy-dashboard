@@ -50,7 +50,7 @@ def calculate_error_rates(df, plan_column, actual_column):
     
     # 負の誤差率：
     # - 通常の負の誤差率（実績≠0かつ誤差率<0）のみ
-    # - 誤差率=0のケースは負の誤差率に含めない
+    # - 誤差率=0のケースは負の誤差率に含めない（集計方針に準拠）
     # - 実績=0のケースは負の誤差率に含めない（理論上発生しない）
     negative_mask = (actual_values != 0) & (error_rate < 0)
     result_df['negative_error_rate'] = error_rate.where(negative_mask)
@@ -61,16 +61,21 @@ def calculate_weighted_average_error_rate(df, error_rate_column, weight_column):
     """
     実績値重み付き加重平均誤差率を計算
     
+    集計方針：
+    - 誤差率0%は絶対誤差率と正の誤差率のみにカウント
+    - 負の誤差率では誤差率0%は除外（negative_error_rate列で既にNaN）
+    
     Parameters:
     df: DataFrame - データフレーム
-    error_rate_column: str - 誤差率カラム名
+    error_rate_column: str - 誤差率カラム名（absolute_error_rate, positive_error_rate, negative_error_rate）
     weight_column: str - 重み（実績値）カラム名
     
     Returns:
     float - 加重平均誤差率
     """
-    # NaNを除外
+    # NaNとinf値を除外（計算不能なケースを除外）
     valid_data = df.dropna(subset=[error_rate_column, weight_column])
+    valid_data = valid_data[~np.isinf(valid_data[error_rate_column])]
     
     if len(valid_data) == 0:
         return np.nan

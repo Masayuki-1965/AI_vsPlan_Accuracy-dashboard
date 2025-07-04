@@ -542,7 +542,7 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
         st.info("💡 以下の方法をお試しください：\n- ブラウザの更新（Ctrl+F5）\n- 異なるブラウザでのアクセス\n- データの確認")
 
 def calculate_abc_average_errors(df, selected_predictions):
-    """ABC区分別の加重平均誤差率を計算（全区分・3種誤差率対応）"""
+    """ABC区分別の加重平均誤差率を計算（集計方針準拠・全区分対応）"""
     if 'Class_abc' not in df.columns:
         return {}
     
@@ -560,27 +560,25 @@ def calculate_abc_average_errors(df, selected_predictions):
         for abc_class in unique_abc_classes:
             abc_data = df_with_errors[df_with_errors['Class_abc'] == abc_class]
             if not abc_data.empty and len(abc_data) > 0:
-                # 絶対誤差率の加重平均
+                # 絶対誤差率の加重平均（全データ対象）
                 absolute_weighted_avg = calculate_weighted_average_error_rate(
                     abc_data, 'absolute_error_rate', 'Actual'
                 )
                 
-                # 正の誤差率（正の値のみ）の加重平均
-                positive_data = abc_data[abc_data['error_rate'] > 0]
-                if not positive_data.empty:
-                    positive_weighted_avg = calculate_weighted_average_error_rate(
-                        positive_data, 'error_rate', 'Actual'
-                    )
-                else:
-                    positive_weighted_avg = 0.0
+                # 正の誤差率の加重平均（positive_error_rate列を使用、誤差率0%を含む）
+                positive_weighted_avg = calculate_weighted_average_error_rate(
+                    abc_data, 'positive_error_rate', 'Actual'
+                )
                 
-                # 負の誤差率（負の値のみ）の加重平均
-                negative_data = abc_data[abc_data['error_rate'] < 0]
-                if not negative_data.empty:
-                    negative_weighted_avg = calculate_weighted_average_error_rate(
-                        negative_data, 'error_rate', 'Actual'
-                    )
-                else:
+                # 負の誤差率の加重平均（negative_error_rate列を使用、誤差率0%を除外）
+                negative_weighted_avg = calculate_weighted_average_error_rate(
+                    abc_data, 'negative_error_rate', 'Actual'
+                )
+                
+                # NaNの場合は0.0に設定
+                if pd.isna(positive_weighted_avg):
+                    positive_weighted_avg = 0.0
+                if pd.isna(negative_weighted_avg):
                     negative_weighted_avg = 0.0
                 
                 abc_stats[abc_class] = {
@@ -666,16 +664,21 @@ def display_abc_average_table(abc_errors, filtered_df):
             for pred_col in sorted(abc_errors.keys()):
                 if abc_class in abc_errors[pred_col]:
                     error_rate = abc_errors[pred_col][abc_class][error_type]
-                    if error_type == 'positive_error_rate' and error_rate != 0:
+                    if error_type == 'positive_error_rate':
                         # 正の誤差率には+記号を付ける
-                        formatted_rate = f"+{error_rate:.1%}"
+                        formatted_rate = f"＋{error_rate:.1%}"
+                    elif error_type == 'negative_error_rate':
+                        # 負の誤差率には▲記号を付ける
+                        formatted_rate = f"▲{abs(error_rate):.1%}"
                     else:
                         formatted_rate = f"{error_rate:.1%}"
                     row_data.append(formatted_rate)
                 else:
                     # データがない場合
                     if error_type == 'positive_error_rate':
-                        row_data.append("+0.0%")
+                        row_data.append("＋0.0%")
+                    elif error_type == 'negative_error_rate':
+                        row_data.append("▲0.0%")
                     else:
                         row_data.append("0.0%")
         
@@ -696,48 +699,32 @@ def display_abc_average_table(abc_errors, filtered_df):
     # 合計行も文字列形式でフォーマット
     total_row_data.extend([f"{grand_total_count:,}", f"{grand_total_actual:,.0f}"])
     
-    # 各誤差率の全体加重平均を計算
+    # 各誤差率の全体加重平均を計算（集計方針準拠）
     for error_type in ['absolute_error_rate', 'negative_error_rate', 'positive_error_rate']:
         for pred_col in sorted(abc_errors.keys()):
-            # 全体の加重平均を計算（正負の場合は該当データのみ）
+            # 全体の加重平均を計算（専用の誤差率列を使用）
+            df_with_errors = calculate_error_rates(filtered_df, pred_col, 'Actual')
+            
             if error_type == 'positive_error_rate':
-                # 正の誤差率のみでフィルタリング
-                df_with_errors = calculate_error_rates(filtered_df, pred_col, 'Actual')
-                positive_data = df_with_errors[df_with_errors['error_rate'] > 0]
-                
-                if len(positive_data) > 0:
-                    overall_rate = calculate_weighted_average_error_rate(positive_data, 'error_rate', 'Actual')
-                    formatted_rate = f"+{overall_rate:.1%}"
-                else:
-                    formatted_rate = "+0.0%"
+                # positive_error_rate列を使用（誤差率0%を含む）
+                overall_rate = calculate_weighted_average_error_rate(df_with_errors, 'positive_error_rate', 'Actual')
+                if pd.isna(overall_rate):
+                    overall_rate = 0.0
+                formatted_rate = f"＋{overall_rate:.1%}"
                     
             elif error_type == 'negative_error_rate':
-                # 負の誤差率のみでフィルタリング
-                df_with_errors = calculate_error_rates(filtered_df, pred_col, 'Actual')
-                negative_data = df_with_errors[df_with_errors['error_rate'] < 0]
-                
-                if len(negative_data) > 0:
-                    overall_rate = calculate_weighted_average_error_rate(negative_data, 'error_rate', 'Actual')
-                    formatted_rate = f"{overall_rate:.1%}"
-                else:
-                    formatted_rate = "0.0%"
+                # negative_error_rate列を使用（誤差率0%を除外）
+                overall_rate = calculate_weighted_average_error_rate(df_with_errors, 'negative_error_rate', 'Actual')
+                if pd.isna(overall_rate):
+                    overall_rate = 0.0
+                formatted_rate = f"▲{abs(overall_rate):.1%}"
                     
             else:  # absolute_error_rate
-                # 絶対誤差率（従来通り）
-                total_weighted_sum = 0
-                total_weight = 0
-                
-                for abc_class, stats in abc_errors[pred_col].items():
-                    error_rate = stats[error_type]
-                    weight = stats['actual_sum']
-                    total_weighted_sum += error_rate * weight
-                    total_weight += weight
-                
-                if total_weight > 0:
-                    overall_rate = total_weighted_sum / total_weight
-                    formatted_rate = f"{overall_rate:.1%}"
-                else:
-                    formatted_rate = "0.0%"
+                # absolute_error_rate列を使用（全データ対象）
+                overall_rate = calculate_weighted_average_error_rate(df_with_errors, 'absolute_error_rate', 'Actual')
+                if pd.isna(overall_rate):
+                    overall_rate = 0.0
+                formatted_rate = f"{overall_rate:.1%}"
             
             total_row_data.append(formatted_rate)
     
@@ -800,9 +787,12 @@ def display_abc_average_table(abc_errors, filtered_df):
     )
     
     # 注釈の配置とスタイル調整（表の下部に移動、UI/UXガイドライン準拠）
-    st.markdown(
-        '<div class="step-annotation">※ 誤差率は実績値で重みづけした加重平均値です。</div>',
-        unsafe_allow_html=True
-    )
+    st.markdown("""
+    <div class="step-annotation">
+    ※ 誤差率は実績値で重みづけした加重平均値です。<br>
+    ※ 集計方針：誤差率0%（完全一致）は「絶対誤差率」と「正の誤差率」のみにカウントされ、「負の誤差率」からは除外されています。<br>
+    ※ 負の誤差率は「▲〇.〇％」、正の誤差率は「＋〇.〇％」で表記し、すべて小数第1位で統一しています。
+    </div>
+    """, unsafe_allow_html=True)
 
  

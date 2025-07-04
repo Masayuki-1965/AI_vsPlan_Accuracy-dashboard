@@ -15,21 +15,45 @@ def calculate_error_rates(df, plan_column, actual_column):
     """
     result_df = df.copy()
     
-    # ゼロ除算対策：実績値が0の場合はNaNにする（計算不能）
     plan_values = result_df[plan_column]
-    actual_values = result_df[actual_column].replace(0, np.nan)
-    
-    # 絶対誤差率 = |計画値 - 実績値| ÷ 実績値
-    result_df['absolute_error_rate'] = np.abs(plan_values - actual_values) / actual_values
-    
-    # 正の誤差率・負の誤差率 = (計画値 - 実績値) ÷ 実績値
-    error_rate = (plan_values - actual_values) / actual_values
-    result_df['error_rate'] = error_rate
-    result_df['positive_error_rate'] = error_rate.where(error_rate >= 0)
-    result_df['negative_error_rate'] = error_rate.where(error_rate < 0)
+    actual_values = result_df[actual_column]
     
     # 実績がゼロの場合の判定フラグ
-    result_df['is_actual_zero'] = result_df[actual_column] == 0
+    result_df['is_actual_zero'] = actual_values == 0
+    
+    # 通常の誤差率計算（実績≠0の場合）
+    normal_mask = actual_values != 0
+    error_rate = pd.Series(index=result_df.index, dtype=float)
+    error_rate[normal_mask] = (plan_values[normal_mask] - actual_values[normal_mask]) / actual_values[normal_mask]
+    
+    # 実績=0の場合の特別処理
+    zero_actual_mask = actual_values == 0
+    if zero_actual_mask.any():
+        # 実績=0の場合の分類：
+        # - 予測値>0：計算不能（正の誤差率のみ）
+        # - 予測値=0：計画対象外として計算不能（絶対・正・負すべてで計算不能）
+        
+        positive_pred_mask = zero_actual_mask & (plan_values > 0)
+        zero_pred_mask = zero_actual_mask & (plan_values == 0)
+        
+        error_rate[positive_pred_mask] = float('inf')  # 計算不能
+        error_rate[zero_pred_mask] = float('inf')  # 計画対象外として計算不能
+    
+    result_df['error_rate'] = error_rate
+    
+    # 絶対誤差率：全データを対象
+    result_df['absolute_error_rate'] = error_rate.abs()
+    
+    # 正の誤差率：誤差率 >= 0 の場合（実績=0のケースを含む、誤差率=0も含む）
+    positive_mask = (error_rate >= 0)
+    result_df['positive_error_rate'] = error_rate.where(positive_mask)
+    
+    # 負の誤差率：
+    # - 通常の負の誤差率（実績≠0かつ誤差率<0）のみ
+    # - 誤差率=0のケースは負の誤差率に含めない
+    # - 実績=0のケースは負の誤差率に含めない（理論上発生しない）
+    negative_mask = (actual_values != 0) & (error_rate < 0)
+    result_df['negative_error_rate'] = error_rate.where(negative_mask)
     
     return result_df
 
@@ -77,43 +101,61 @@ def categorize_error_rates(df, error_rate_column, error_type='absolute'):
     # 実績がゼロの場合を最初にチェック
     is_actual_zero = df.get('is_actual_zero', pd.Series([False] * len(df), index=df.index))
     
-    # 実績ゼロの場合は計算不能として分類
-    result = pd.Series(['計算不能（実績ゼロ）'] * len(df), index=df.index, name='error_rate_category')
+    # 結果の初期化
+    result = pd.Series(['未区分'] * len(df), index=df.index, name='error_rate_category')
     
-    # 実績がゼロでない場合のみ誤差率で分類
+    # 実績=0の場合の特別処理
+    if is_actual_zero.any():
+        # 負の誤差率タイプの場合は、実績=0のケースを除外（理論上発生しない）
+        if error_type == 'negative':
+            # 負の誤差率では実績=0のケースを含めない
+            pass
+        else:
+            # 絶対誤差率と正の誤差率では、実績=0の場合を「計算不能（実績ゼロ）」に分類
+            result[is_actual_zero] = '計算不能（実績ゼロ）'
+    
+    # 実績がゼロでない場合の誤差率で分類
     valid_mask = ~is_actual_zero
     if valid_mask.any():
-        error_rates = df.loc[valid_mask, error_rate_column].fillna(0)
+        error_rates = df.loc[valid_mask, error_rate_column]
         
-        # 誤差率タイプに応じた処理
-        if error_type == 'absolute':
-            error_rates = error_rates.abs()
-        elif error_type == 'positive':
-            # 正の誤差率：計画値 > 実績値の場合のみ
-            error_rates = error_rates.where(error_rates >= 0, np.nan)
-        elif error_type == 'negative':
-            # 負の誤差率：計画値 < 実績値の場合のみ（絶対値にする）
-            error_rates = error_rates.where(error_rates < 0, np.nan).abs()
-        
-        conditions = []
-        choices = []
-        
-        categories = ERROR_RATE_CATEGORIES.get(error_type, ERROR_RATE_CATEGORIES['absolute'])
-        
-        for category in categories:
-            if 'special' not in category:  # 通常の誤差率区分
-                min_val = category['min']
-                max_val = category['max']
-                if max_val == float('inf'):
-                    condition = error_rates >= min_val
-                else:
-                    condition = (error_rates >= min_val) & (error_rates < max_val)
-                conditions.append(condition)
-                choices.append(category['label'])
-        
-        # 有効なデータに対して誤差率区分を適用
-        valid_categories = np.select(conditions, choices, default='未区分')
-        result.loc[valid_mask] = valid_categories
+        # NaNを除外（positive_error_rate、negative_error_rateで条件に合わない場合）
+        non_nan_mask = ~error_rates.isna()
+        if non_nan_mask.any():
+            error_rates = error_rates[non_nan_mask]
+            
+            # 誤差率タイプに応じた処理
+            if error_type == 'absolute':
+                error_rates = error_rates.abs()
+            elif error_type == 'positive':
+                # positive_error_rate列はすでに正の値と0を含んでいるため、フィルタリング不要
+                pass
+            elif error_type == 'negative':
+                # negative_error_rate列はすでに負の値と0を含んでいるため、絶対値化のみ
+                error_rates = error_rates.abs()
+            
+            conditions = []
+            choices = []
+            
+            categories = ERROR_RATE_CATEGORIES.get(error_type, ERROR_RATE_CATEGORIES['absolute'])
+            
+            for category in categories:
+                if 'special' not in category:  # 通常の誤差率区分
+                    min_val = category['min']
+                    max_val = category['max']
+                    if max_val == float('inf'):
+                        condition = error_rates >= min_val
+                    else:
+                        condition = (error_rates >= min_val) & (error_rates < max_val)
+                    conditions.append(condition)
+                    choices.append(category['label'])
+            
+            # 有効なデータに対して誤差率区分を適用
+            valid_categories = np.select(conditions, choices, default='未区分')
+            
+            # 元のインデックスに対応するマスクを作成
+            final_mask = valid_mask & df[error_rate_column].notna()
+            result.loc[final_mask] = valid_categories
     
     return result
 
@@ -189,3 +231,5 @@ def compare_prediction_accuracy(df):
             }
     
     return results 
+
+ 

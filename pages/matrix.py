@@ -314,11 +314,25 @@ def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
         
         matrix_data.append(row_data)
     
-    # 合計行の追加
+    # 合計行の追加（誤差率タイプに応じた実際の対象データ数）
     total_row_data = []
-    total_row_data.append(len(error_data['AI_pred']))
+    
+    # AI予測の対象データ数（誤差率タイプごとに適切に計算）
+    if error_type == 'absolute':
+        # 絶対誤差率：全データを対象
+        ai_valid_count = len(error_data['AI_pred'])
+    else:
+        # 正・負の誤差率：該当する誤差率列でNaNでないデータを対象
+        ai_valid_count = len(error_data['AI_pred'][error_data['AI_pred'][error_col].notna()])
+    total_row_data.append(ai_valid_count)
+    
     for plan_col in plan_columns:
-        total_row_data.append(len(error_data[plan_col]))
+        if error_type == 'absolute':
+            plan_valid_count = len(error_data[plan_col])
+        else:
+            plan_valid_count = len(error_data[plan_col][error_data[plan_col][error_col].notna()])
+        total_row_data.append(plan_valid_count)
+    
     matrix_data.append(total_row_data)
     
     # 加重平均誤差率行の追加
@@ -364,7 +378,13 @@ def display_basic_matrix(matrix_df):
     # ③ 注釈の追加
     st.markdown("""
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
-    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。
+    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
+    ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
+    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能（実績ゼロ）」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
+    ※ 「負の誤差率」には、実績値=0のケースは構造上存在しません（計画値・AI予測ともに正の受注値であるため、実績ゼロでも負の誤差は発生しません）。<br>
+    ※ 整合式①：絶対誤差率「各帯域」件数 ＝ 正の誤差率「該当帯域」件数 ＋ 負の誤差率「該当帯域」件数<br>
+    ※ 整合式②：絶対誤差率「計算不能」件数 ＝ 正の誤差率「計算不能」件数 ＋ 負の誤差率「計算不能」件数（＝0）<br>
+    ※ 整合式③：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
     </div>
     """, unsafe_allow_html=True)
 
@@ -434,20 +454,45 @@ def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns)
         
         matrix_data.append(row_data)
     
-    # 合計行の追加
+    # 合計行の追加（誤差率タイプに応じた実際の対象データ数）
     total_row_data = []
-    total_row_data.append(len(error_data['AI_pred']))
+    
+    # AI予測の対象データ数（誤差率タイプごとに適切に計算）
+    if error_type == 'absolute':
+        # 絶対誤差率：全データを対象
+        ai_valid_count = len(error_data['AI_pred'])
+    else:
+        # 正・負の誤差率：該当する誤差率列でNaNでないデータを対象
+        ai_valid_count = len(error_data['AI_pred'][error_data['AI_pred'][error_col].notna()])
+    total_row_data.append(ai_valid_count)
     
     for plan_col in plan_columns:
-        total_row_data.append(len(error_data[plan_col]))
+        if error_type == 'absolute':
+            plan_valid_count = len(error_data[plan_col])
+        else:
+            plan_valid_count = len(error_data[plan_col][error_data[plan_col][error_col].notna()])
+        total_row_data.append(plan_valid_count)
     
     for abc in abc_categories:
-        ai_abc_total = len(error_data['AI_pred'][error_data['AI_pred']['Class_abc'] == abc])
-        total_row_data.append(ai_abc_total)
+        # AI予測のABC区分別対象データ数
+        if error_type == 'absolute':
+            ai_abc_valid_count = len(error_data['AI_pred'][error_data['AI_pred']['Class_abc'] == abc])
+        else:
+            ai_abc_valid_count = len(error_data['AI_pred'][
+                (error_data['AI_pred'][error_col].notna()) & 
+                (error_data['AI_pred']['Class_abc'] == abc)
+            ])
+        total_row_data.append(ai_abc_valid_count)
         
         for plan_col in plan_columns:
-            plan_abc_total = len(error_data[plan_col][error_data[plan_col]['Class_abc'] == abc])
-            total_row_data.append(plan_abc_total)
+            if error_type == 'absolute':
+                plan_abc_valid_count = len(error_data[plan_col][error_data[plan_col]['Class_abc'] == abc])
+            else:
+                plan_abc_valid_count = len(error_data[plan_col][
+                    (error_data[plan_col][error_col].notna()) & 
+                    (error_data[plan_col]['Class_abc'] == abc)
+                ])
+            total_row_data.append(plan_abc_valid_count)
     
     matrix_data.append(total_row_data)
     
@@ -509,7 +554,13 @@ def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
     # ③ 注釈の追加
     st.markdown("""
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
-    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。
+    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
+    ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
+    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能（実績ゼロ）」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
+    ※ 「負の誤差率」には、実績値=0のケースは構造上存在しません（計画値・AI予測ともに正の受注値であるため、実績ゼロでも負の誤差は発生しません）。<br>
+    ※ 整合式①：絶対誤差率「各帯域」件数 ＝ 正の誤差率「該当帯域」件数 ＋ 負の誤差率「該当帯域」件数<br>
+    ※ 整合式②：絶対誤差率「計算不能」件数 ＝ 正の誤差率「計算不能」件数 ＋ 負の誤差率「計算不能」件数（＝0）<br>
+    ※ 整合式③：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
     </div>
     """, unsafe_allow_html=True)
 

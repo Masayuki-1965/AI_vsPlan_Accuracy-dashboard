@@ -125,15 +125,16 @@ def show():
     # デフォルト値の計算（分類ごとに最適化）
     default_y_max = get_optimal_y_max(filtered_df, selected_predictions)
     
-    # 分類フィルターの値を取得（キー生成のため）
+    # 分類フィルターの値と比較対象を取得（キー生成のため）
     current_category = st.session_state.get('category_filter', '全て')
     current_date = st.session_state.get('date_filter', '全期間')
-    filter_key = f"{current_category}_{current_date}"
+    predictions_key = '_'.join(sorted(selected_predictions))  # 比較対象もキーに含める
+    filter_key = f"{current_category}_{current_date}_{predictions_key}"
     
-    # 前回の分類フィルター値を記録・比較
+    # 前回のフィルター値を記録・比較
     previous_filter_key = st.session_state.get('previous_filter_key', '')
     if previous_filter_key != filter_key:
-        # 分類フィルターが変更された場合、古いキーの値をクリア
+        # フィルターまたは比較対象が変更された場合、古いキーの値をクリア
         st.session_state['previous_filter_key'] = filter_key
         # 既存の軸スケール設定をリセット
         for key in list(st.session_state.keys()):
@@ -163,14 +164,24 @@ def show():
         )
     
     with col3:
-        # 分類変更時に縦軸最大値を自動最適化
+        # 縦軸最大値の自動最適化（比較対象変更時も含む）
         current_y_max = default_y_max
         
         # 前回と同じフィルターで、かつユーザーが手動調整済みの場合のみ保持
+        # ただし、比較対象が変更された場合は新しい最適値を使用
         if (previous_filter_key == filter_key and 
-            f"y_max_scatter_{filter_key}" in st.session_state and
-            st.session_state[f"y_max_scatter_{filter_key}"] != default_y_max):
-            current_y_max = st.session_state[f"y_max_scatter_{filter_key}"]
+            f"y_max_scatter_{filter_key}" in st.session_state):
+            # 前回の値を取得
+            previous_y_max = st.session_state[f"y_max_scatter_{filter_key}"]
+            # 前回の最適値を計算（比較対象が変更されていない場合）
+            previous_optimal = st.session_state.get(f"optimal_y_max_{filter_key}", default_y_max)
+            
+            # ユーザーが手動調整している場合のみ保持
+            if previous_y_max != previous_optimal:
+                current_y_max = previous_y_max
+        
+        # 現在の最適値を記録（次回の判定用）
+        st.session_state[f"optimal_y_max_{filter_key}"] = default_y_max
         
         y_max_input = st.number_input(
             "縦軸最大値",
@@ -232,22 +243,22 @@ def apply_filters(df):
     return filtered_df
 
 def get_prediction_name(pred_type):
-    """予測タイプの表示名を取得（カスタム項目名対応・10文字省略対応）"""
+    """予測タイプの表示名を取得（カスタム項目名対応・5文字省略対応）"""
     # カスタム項目名があるかチェック
     if 'custom_column_names' in st.session_state and pred_type in st.session_state.custom_column_names:
         custom_name = st.session_state.custom_column_names[pred_type].strip()
         if custom_name:
-            # 全角10文字を超える場合は省略
-            if len(custom_name) > 10:
-                return custom_name[:10] + '…'
+            # 全角5文字を超える場合は省略
+            if len(custom_name) > 5:
+                return custom_name[:5] + '…'
             else:
                 return custom_name
     
     # デフォルト名を取得
     default_name = PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
-    # デフォルト名も10文字チェック
-    if len(default_name) > 10:
-        return default_name[:10] + '…'
+    # デフォルト名も5文字チェック
+    if len(default_name) > 5:
+        return default_name[:5] + '…'
     else:
         return default_name
 
@@ -262,9 +273,22 @@ def get_optimal_y_max(df, selected_predictions):
     
     if max_values:
         overall_max = max(max_values)
-        # 10%のマージンを追加し、100の倍数に丸める
-        optimized_max = int((overall_max * 1.1 // 100 + 1) * 100)
-        return max(optimized_max, 1000)  # 最低1000は確保
+        # 10%のマージンを追加し、適切な単位で丸める
+        margin_added = overall_max * 1.1
+        
+        # データ規模に応じて適切な単位で丸める
+        if margin_added <= 100:
+            # 100以下の場合：10の倍数
+            optimized_max = int((margin_added // 10 + 1) * 10)
+        elif margin_added <= 1000:
+            # 1000以下の場合：50の倍数
+            optimized_max = int((margin_added // 50 + 1) * 50)
+        else:
+            # 1000超の場合：100の倍数
+            optimized_max = int((margin_added // 100 + 1) * 100)
+        
+        # 最低値は50（データがある場合）
+        return max(optimized_max, 50)
     else:
         return 1000
 

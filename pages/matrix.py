@@ -352,7 +352,7 @@ def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
     matrix_data.append(weighted_avg_row_data)
     
     # DataFrame作成（最初から文字列で統一）
-    index_labels = error_bands_original + ['合計（件数）', '加重平均誤差率']
+    index_labels = error_bands_original + ['合計件数', '加重平均誤差率']
     
     # 数値データを文字列に変換してからDataFrame作成
     matrix_data_str = []
@@ -369,18 +369,79 @@ def create_basic_matrix(error_data, error_type, abc_categories, plan_columns):
     return matrix_df
 
 def display_basic_matrix(matrix_df):
-    """基本的なマトリクス表示"""
-    st.dataframe(
-        matrix_df,
-        use_container_width=True
-    )
+    """基本的なマトリクス表示（比較対象数に応じた動的幅調整）"""
+    # 比較対象の数をカラム数から推定
+    num_predictions = len(matrix_df.columns)
+    
+    # 比較対象数に応じた動的CSS設定
+    if num_predictions == 2:
+        # 2つの比較対象の場合：列幅を広く取る
+        prediction_column_width = 45.0  # 各予測列の幅
+    else:
+        # 3つ以上の比較対象の場合：従来通り
+        prediction_column_width = 30.0
+    
+    # 動的CSS生成（基本マトリクス専用のユニークなクラス名を使用）
+    matrix_id = f"basic_matrix_{num_predictions}"
+    dynamic_css = f"""
+    <style>
+    .{matrix_id} .stDataFrame > div {{
+        width: 100%;
+    }}
+    .{matrix_id} .stDataFrame table {{
+        width: 100% !important;
+        table-layout: fixed !important;
+    }}
+    .{matrix_id} .stDataFrame th, .{matrix_id} .stDataFrame td {{
+        text-align: center !important;
+        word-wrap: break-word !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }}
+    /* 誤差率帯列の幅を確保 */
+    .{matrix_id} .stDataFrame th:first-child, .{matrix_id} .stDataFrame td:first-child {{
+        width: 140px !important;
+        min-width: 140px !important;
+        max-width: 140px !important;
+    }}
+    /* 予測・計画値の列 */
+    .{matrix_id} .stDataFrame th:nth-child(n+2), .{matrix_id} .stDataFrame td:nth-child(n+2) {{
+        width: {prediction_column_width}% !important;
+        min-width: 80px !important;
+    }}
+    </style>
+    """
+    st.markdown(dynamic_css, unsafe_allow_html=True)
+    
+    # ユニークなクラス名を適用したコンテナでテーブルを表示
+    with st.container():
+        st.markdown(f'<div class="{matrix_id}">', unsafe_allow_html=True)
+        
+        # Streamlitの列設定を使用してカラム幅を明示的に指定
+        column_config = {}
+        
+        # インデックス列（誤差率帯）の設定
+        if matrix_df.index.name:
+            column_config[matrix_df.index.name] = st.column_config.TextColumn(
+                matrix_df.index.name,
+                width=120,
+                help="誤差率の帯域"
+            )
+        
+        st.dataframe(
+            matrix_df,
+            use_container_width=True,
+            column_config=column_config
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # ③ 注釈の追加
     st.markdown("""
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
     ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
     ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
-    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能（実績ゼロ）」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
+    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能(実績0)」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
     ※ 「負の誤差率」には、実績値=0のケースは構造上存在しません（計画値・AI予測ともに正の受注値であるため、実績ゼロでも負の誤差は発生しません）。<br>
     ※ 整合式①：絶対誤差率「各帯域」件数 ＝ 正の誤差率「該当帯域」件数 ＋ 負の誤差率「該当帯域」件数<br>
     ※ 整合式②：絶対誤差率「計算不能」件数 ＝ 正の誤差率「計算不能」件数 ＋ 負の誤差率「計算不能」件数（＝0）<br>
@@ -527,7 +588,7 @@ def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns)
     matrix_data.append(weighted_avg_row_data)
     
     # DataFrame作成（最初から文字列で統一）
-    index_labels = error_bands_original + ['合計（件数）', '加重平均誤差率']
+    index_labels = error_bands_original + ['合計件数', '加重平均誤差率']
     
     # 数値データを文字列に変換してからDataFrame作成
     matrix_data_str = []
@@ -544,19 +605,106 @@ def create_advanced_matrix(error_data, error_type, abc_categories, plan_columns)
     return matrix_df
 
 def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
-    """高度なマトリクス表示（2段ヘッダー対応）"""
-    # データは既に文字列形式なので、そのまま表示
-    st.dataframe(
-        matrix_df,
-        use_container_width=True
-    )
+    """高度なマトリクス表示（2段ヘッダー対応、比較対象数に応じた動的幅調整）"""
+    # 比較対象の数（AI予測 + 計画値）
+    num_predictions = len(plan_columns) + 1  # +1はAI予測分
+    
+    # 比較対象数に応じた動的CSS設定
+    if num_predictions == 2:
+        # 2つの比較対象の場合：列幅を広く取る
+        prediction_column_width = 18.0  # 各予測列の幅
+        base_column_width = 12.0       # 基本列（区分、件数、実績合計）の幅
+    else:
+        # 3つ以上の比較対象の場合：従来通り
+        prediction_column_width = 12.67
+        base_column_width = 8.0
+    
+    # 動的CSS生成（マトリクス専用のユニークなクラス名を使用）
+    matrix_id = f"matrix_{num_predictions}_{len(abc_categories)}"
+    dynamic_css = f"""
+    <style>
+    .{matrix_id} .stDataFrame > div {{
+        width: 100%;
+    }}
+    .{matrix_id} .stDataFrame table {{
+        width: 100% !important;
+        table-layout: fixed !important;
+    }}
+    .{matrix_id} .stDataFrame th, .{matrix_id} .stDataFrame td {{
+        text-align: center !important;
+        word-wrap: break-word !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }}
+    /* 誤差率帯列の幅を確保 */
+    .{matrix_id} .stDataFrame th:first-child, .{matrix_id} .stDataFrame td:first-child {{
+        width: 140px !important;
+        min-width: 140px !important;
+        max-width: 140px !important;
+    }}
+    /* 区分列 */
+    .{matrix_id} .stDataFrame th:nth-child(2), .{matrix_id} .stDataFrame td:nth-child(2) {{
+        width: {base_column_width}% !important;
+        min-width: 60px !important;
+    }}
+    /* 件数列 */
+    .{matrix_id} .stDataFrame th:nth-child(3), .{matrix_id} .stDataFrame td:nth-child(3) {{
+        width: {base_column_width}% !important;
+        min-width: 60px !important;
+    }}
+    /* 実績合計列 */
+    .{matrix_id} .stDataFrame th:nth-child(4), .{matrix_id} .stDataFrame td:nth-child(4) {{
+        width: {base_column_width}% !important;
+        min-width: 60px !important;
+    }}
+    /* 予測・計画値の列 */
+    .{matrix_id} .stDataFrame th:nth-child(n+5), .{matrix_id} .stDataFrame td:nth-child(n+5) {{
+        width: {prediction_column_width}% !important;
+        min-width: 80px !important;
+    }}
+    /* 1行目のヘッダー（MultiIndexの最上位レベル）を非表示 */
+    .{matrix_id} .stDataFrame thead tr:first-child {{
+        display: none;
+    }}
+    /* 左側3列の1行目ヘッダーの境界線も非表示 */
+    .{matrix_id} .stDataFrame thead tr:first-child th:nth-child(1),
+    .{matrix_id} .stDataFrame thead tr:first-child th:nth-child(2),
+    .{matrix_id} .stDataFrame thead tr:first-child th:nth-child(3) {{
+        border-bottom: none !important;
+    }}
+    </style>
+    """
+    st.markdown(dynamic_css, unsafe_allow_html=True)
+    
+    # ユニークなクラス名を適用したコンテナでテーブルを表示
+    with st.container():
+        st.markdown(f'<div class="{matrix_id}">', unsafe_allow_html=True)
+        
+        # Streamlitの列設定を使用してカラム幅を明示的に指定
+        column_config = {}
+        
+        # インデックス列（誤差率帯）の設定
+        if matrix_df.index.name:
+            column_config[matrix_df.index.name] = st.column_config.TextColumn(
+                matrix_df.index.name,
+                width=120,
+                help="誤差率の帯域"
+            )
+        
+        st.dataframe(
+            matrix_df,
+            use_container_width=True,
+            column_config=column_config
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # ③ 注釈の追加
     st.markdown("""
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
     ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
     ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
-    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能（実績ゼロ）」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
+    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能(実績0)」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
     ※ 「負の誤差率」には、実績値=0のケースは構造上存在しません（計画値・AI予測ともに正の受注値であるため、実績ゼロでも負の誤差は発生しません）。<br>
     ※ 整合式①：絶対誤差率「各帯域」件数 ＝ 正の誤差率「該当帯域」件数 ＋ 負の誤差率「該当帯域」件数<br>
     ※ 整合式②：絶対誤差率「計算不能」件数 ＝ 正の誤差率「計算不能」件数 ＋ 負の誤差率「計算不能」件数（＝0）<br>
@@ -565,7 +713,18 @@ def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
     """, unsafe_allow_html=True)
 
 def get_plan_name(plan_col):
-    """計画カラム名を表示用に変換（省略表示対応）"""
+    """計画カラム名を表示用に変換（カスタム項目名対応・省略表示対応）"""
+    # カスタム項目名があるかチェック
+    if 'custom_column_names' in st.session_state and plan_col in st.session_state.custom_column_names:
+        custom_name = st.session_state.custom_column_names[plan_col].strip()
+        if custom_name:
+            # 全角5文字を超える場合は省略
+            if len(custom_name) > 5:
+                return custom_name[:5] + '…'
+            else:
+                return custom_name
+    
+    # デフォルト名を設定
     if plan_col == 'Plan_01':
         display_name = '計画01'
     elif plan_col == 'Plan_02':
@@ -575,9 +734,9 @@ def get_plan_name(plan_col):
     else:
         display_name = plan_col
     
-    # 全角5文字を超える場合は省略表示
+    # デフォルト名も5文字チェック
     if len(display_name) > 5:
-        return display_name[:4] + '…'
+        return display_name[:5] + '…'
     return display_name
 
 def format_weighted_average(weighted_avg, error_type):

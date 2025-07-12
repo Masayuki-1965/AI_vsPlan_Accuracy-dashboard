@@ -60,7 +60,7 @@ ERROR_RATE_CATEGORIES = {
         {'min': 0.3, 'max': 0.5, 'label': '30〜50%'},
         {'min': 0.5, 'max': 1.0, 'label': '50〜100%'},
         {'min': 1.0, 'max': float('inf'), 'label': '100%以上'},
-        {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
+        {'special': 'actual_zero', 'label': '計算不能 (実績0)'}
     ],
     'positive': [
         {'min': 0.0, 'max': 0.1, 'label': '＋0〜10%'},
@@ -69,7 +69,7 @@ ERROR_RATE_CATEGORIES = {
         {'min': 0.3, 'max': 0.5, 'label': '＋30〜50%'},
         {'min': 0.5, 'max': 1.0, 'label': '＋50〜100%'},
         {'min': 1.0, 'max': float('inf'), 'label': '＋100%超'},
-        {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
+        {'special': 'actual_zero', 'label': '計算不能 (実績0)'}
     ],
     'negative': [
         {'min': 0.0, 'max': 0.1, 'label': '▲0〜10%'},
@@ -78,7 +78,7 @@ ERROR_RATE_CATEGORIES = {
         {'min': 0.3, 'max': 0.5, 'label': '▲30〜50%'},
         {'min': 0.5, 'max': 1.0, 'label': '▲50〜100%'},
         {'min': 1.0, 'max': float('inf'), 'label': '▲100%超'},
-        {'special': 'actual_zero', 'label': '計算不能（実績ゼロ）'}
+        {'special': 'actual_zero', 'label': '計算不能 (実績0)'}
     ]
 }
 

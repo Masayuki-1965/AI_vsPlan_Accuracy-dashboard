@@ -441,7 +441,7 @@ def display_basic_matrix(matrix_df):
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
     ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
     ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
-    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能 (実績0)」に分類されます。<br>
+    ※ 実績値が0の場合、誤差率が計算できないため、「計算不能 (実績0)」に分類されます。<br>
     ※ 整合式：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
     </div>
     """, unsafe_allow_html=True)
@@ -701,7 +701,7 @@ def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
     ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
     ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
-    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能 (実績0)」に分類されます。<br>
+    ※ 実績値が0の場合、誤差率が計算できないため、「計算不能 (実績0)」に分類されます。<br>
     ※ 整合式：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
     </div>
     """, unsafe_allow_html=True)
@@ -712,9 +712,9 @@ def get_plan_name(plan_col):
     if 'custom_column_names' in st.session_state and plan_col in st.session_state.custom_column_names:
         custom_name = st.session_state.custom_column_names[plan_col].strip()
         if custom_name:
-            # 全角5文字を超える場合は省略
-            if len(custom_name) > 5:
-                return custom_name[:5] + '…'
+            # 全角6文字を超える場合は省略
+            if len(custom_name) > 6:
+                return custom_name[:6] + '…'
             else:
                 return custom_name
     
@@ -728,9 +728,9 @@ def get_plan_name(plan_col):
     else:
         display_name = plan_col
     
-    # デフォルト名も5文字チェック
-    if len(display_name) > 5:
-        return display_name[:5] + '…'
+    # デフォルト名も6文字チェック
+    if len(display_name) > 6:
+        return display_name[:6] + '…'
     return display_name
 
 def format_weighted_average(weighted_avg, error_type):

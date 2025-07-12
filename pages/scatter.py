@@ -243,22 +243,22 @@ def apply_filters(df):
     return filtered_df
 
 def get_prediction_name(pred_type):
-    """予測タイプの表示名を取得（カスタム項目名対応・5文字省略対応）"""
+    """予測タイプの表示名を取得（カスタム項目名対応・6文字省略対応）"""
     # カスタム項目名があるかチェック
     if 'custom_column_names' in st.session_state and pred_type in st.session_state.custom_column_names:
         custom_name = st.session_state.custom_column_names[pred_type].strip()
         if custom_name:
-            # 全角5文字を超える場合は省略
-            if len(custom_name) > 5:
-                return custom_name[:5] + '…'
+            # 全角6文字を超える場合は省略
+            if len(custom_name) > 6:
+                return custom_name[:6] + '…'
             else:
                 return custom_name
     
     # デフォルト名を取得
     default_name = PREDICTION_TYPE_NAMES.get(pred_type, pred_type)
-    # デフォルト名も5文字チェック
-    if len(default_name) > 5:
-        return default_name[:5] + '…'
+    # デフォルト名も6文字チェック
+    if len(default_name) > 6:
+        return default_name[:6] + '…'
     else:
         return default_name
 

@@ -1,8 +1,6 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 from pages import upload, matrix, scatter
-from config.ui_styles import CUSTOM_CSS
+from config.ui_styles import CUSTOM_CSS, FOOTER_HTML
 from config.settings import APP_INFO
 
 # ページ設定
@@ -23,7 +21,7 @@ if hasattr(st, '_get_session_state'):
 # カスタムCSSの適用
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# ヘッダータイトル（Causal Impactと同様のデザイン）
+# ヘッダータイトル（統一デザイン）
 st.markdown(f"""
 <div style="
     background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
@@ -52,10 +50,14 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # セッション状態の初期化
-if 'data' not in st.session_state:
-    st.session_state.data = None
-if 'mapping' not in st.session_state:
-    st.session_state.mapping = {}
+session_defaults = {
+    'data': None,
+    'mapping': {}
+}
+
+for key, default_value in session_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = default_value
 
 # サイドバーナビゲーション
 st.sidebar.title("📋 ナビゲーション")
@@ -76,7 +78,7 @@ if st.session_state.data is not None:
 else:
     st.sidebar.warning("⚠️ データが読み込まれていません")
 
-# 注釈の追加
+# 操作ガイド
 st.sidebar.markdown("---")
 st.sidebar.markdown("**最初からやり直す場合：**")
 st.sidebar.markdown("画面左上の更新ボタン（⟳）をクリックするか、Ctrl + R を押して、STEP1のデータ取り込みから再実行してください。")
@@ -89,5 +91,4 @@ else:
 
 # フッター
 st.markdown("---")
-from config.ui_styles import FOOTER_HTML
 st.markdown(FOOTER_HTML, unsafe_allow_html=True) 

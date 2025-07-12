@@ -19,7 +19,7 @@ COLUMN_MAPPING = {
     'Class_abc': 'ABC区分'
 }
 
-# 必須項目（ABC区分は任意項目に変更）
+# 必須項目（ABC区分は任意項目）
 REQUIRED_COLUMNS = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
 
 # 数値項目
@@ -51,7 +51,7 @@ ABC_CLASSIFICATION_SETTINGS = {
     'min_gap': 0.01  # 1%
 }
 
-# 誤差率区分設定（新仕様）
+# 誤差率区分設定
 ERROR_RATE_CATEGORIES = {
     'absolute': [
         {'min': 0.0, 'max': 0.1, 'label': '0〜10%'},

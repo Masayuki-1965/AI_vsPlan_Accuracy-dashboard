@@ -1,5 +1,5 @@
 import streamlit as st
-from pages import upload, matrix, scatter
+from pages import upload, matrix, scatter, monthly_trend
 from config.ui_styles import CUSTOM_CSS, FOOTER_HTML
 from config.settings import APP_INFO
 
@@ -64,11 +64,12 @@ st.sidebar.title("📋 ナビゲーション")
 pages = {
     "データセット作成": upload,
     "誤差率帯別評価マトリクス": matrix,
-    "散布図分析": scatter
+    "散布図分析": scatter,
+    "月次推移折れ線グラフ一覧": monthly_trend
 }
 
 selected_page = st.sidebar.selectbox(
-    "ページを選択:",
+    "ページ選択:",
     list(pages.keys())
 )
 

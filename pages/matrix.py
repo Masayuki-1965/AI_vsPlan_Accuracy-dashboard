@@ -399,12 +399,12 @@ def display_basic_matrix(matrix_df):
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }}
-    /* 誤差率帯列の幅を確保 */
-    .{matrix_id} .stDataFrame th:first-child, .{matrix_id} .stDataFrame td:first-child {{
-        width: 140px !important;
-        min-width: 140px !important;
-        max-width: 140px !important;
-    }}
+         /* 誤差率帯列の幅を確保 */
+     .{matrix_id} .stDataFrame th:first-child, .{matrix_id} .stDataFrame td:first-child {{
+         width: 140px !important;
+         min-width: 140px !important;
+         max-width: 140px !important;
+     }}
     /* 予測・計画値の列 */
     .{matrix_id} .stDataFrame th:nth-child(n+2), .{matrix_id} .stDataFrame td:nth-child(n+2) {{
         width: {prediction_column_width}% !important;
@@ -425,7 +425,7 @@ def display_basic_matrix(matrix_df):
         if matrix_df.index.name:
             column_config[matrix_df.index.name] = st.column_config.TextColumn(
                 matrix_df.index.name,
-                width=120,
+                width=140,
                 help="誤差率の帯域"
             )
         
@@ -441,11 +441,8 @@ def display_basic_matrix(matrix_df):
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
     ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
     ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
-    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能(実績0)」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
-    ※ 「負の誤差率」には、実績値=0のケースは構造上存在しません（計画値・AI予測ともに正の受注値であるため、実績ゼロでも負の誤差は発生しません）。<br>
-    ※ 整合式①：絶対誤差率「各帯域」件数 ＝ 正の誤差率「該当帯域」件数 ＋ 負の誤差率「該当帯域」件数<br>
-    ※ 整合式②：絶対誤差率「計算不能」件数 ＝ 正の誤差率「計算不能」件数 ＋ 負の誤差率「計算不能」件数（＝0）<br>
-    ※ 整合式③：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
+    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能 (実績0)」に分類されます。<br>
+    ※ 整合式：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
     </div>
     """, unsafe_allow_html=True)
 
@@ -637,12 +634,12 @@ def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
         overflow: hidden !important;
         text-overflow: ellipsis !important;
     }}
-    /* 誤差率帯列の幅を確保 */
-    .{matrix_id} .stDataFrame th:first-child, .{matrix_id} .stDataFrame td:first-child {{
-        width: 140px !important;
-        min-width: 140px !important;
-        max-width: 140px !important;
-    }}
+         /* 誤差率帯列の幅を確保 */
+     .{matrix_id} .stDataFrame th:first-child, .{matrix_id} .stDataFrame td:first-child {{
+         width: 140px !important;
+         min-width: 140px !important;
+         max-width: 140px !important;
+     }}
     /* 区分列 */
     .{matrix_id} .stDataFrame th:nth-child(2), .{matrix_id} .stDataFrame td:nth-child(2) {{
         width: {base_column_width}% !important;
@@ -688,7 +685,7 @@ def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
         if matrix_df.index.name:
             column_config[matrix_df.index.name] = st.column_config.TextColumn(
                 matrix_df.index.name,
-                width=120,
+                width=140,
                 help="誤差率の帯域"
             )
         
@@ -704,11 +701,8 @@ def display_advanced_matrix(matrix_df, abc_categories, plan_columns):
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
     ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
     ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」のみに含まれます。「負の誤差率」には含まれていません。<br>
-    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能(実績0)」に分類されます。このケースは「絶対誤差率」「正の誤差率」に含まれます。<br>
-    ※ 「負の誤差率」には、実績値=0のケースは構造上存在しません（計画値・AI予測ともに正の受注値であるため、実績ゼロでも負の誤差は発生しません）。<br>
-    ※ 整合式①：絶対誤差率「各帯域」件数 ＝ 正の誤差率「該当帯域」件数 ＋ 負の誤差率「該当帯域」件数<br>
-    ※ 整合式②：絶対誤差率「計算不能」件数 ＝ 正の誤差率「計算不能」件数 ＋ 負の誤差率「計算不能」件数（＝0）<br>
-    ※ 整合式③：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
+    ※ 実績値が0の場合、誤差率が定義できないため、「計算不能 (実績0)」に分類されます。<br>
+    ※ 整合式：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
     </div>
     """, unsafe_allow_html=True)
 

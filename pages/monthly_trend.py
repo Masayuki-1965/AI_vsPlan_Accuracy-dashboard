@@ -558,37 +558,45 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
                 st.plotly_chart(fig, use_container_width=True)
             
             with col_error:
-                # 誤差率情報
-                plan02_html = ""
-                if plan02_avg_error is not None:
-                    plan02_html = f"""
-                    <div class="error-info-item">
-                        <span class="error-info-label">計画値02：</span>
-                        <span class="error-info-value">{plan02_avg_error:.2%}</span>
-                    </div>
-                    """
+                # 誤差率情報をStreamlitの標準コンポーネントで表示
+                st.markdown("**月平均誤差率**")
                 
-                # 差分を計算
+                # 差分を計算（パーセンテージポイントで計算）
                 diff_value = abs(ai_avg_error - plan01_avg_error)
                 
-                st.markdown(f"""
-                <div class="error-info-section">
-                    <div class="error-info-title">月平均誤差率</div>
-                    <div class="error-info-item">
-                        <span class="error-info-label">AI予測値：</span>
-                        <span class="error-info-value">{ai_avg_error:.2%}</span>
-                    </div>
-                    <div class="error-info-item">
-                        <span class="error-info-label">計画値01：</span>
-                        <span class="error-info-value">{plan01_avg_error:.2%}</span>
-                    </div>
-                    {plan02_html}
-                    <div class="error-info-item">
-                        <span class="error-info-label">差分：</span>
-                        <span class="error-info-diff">{diff_value:.2%}</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # メトリクス表示
+                col_metrics1, col_metrics2 = st.columns(2)
+                
+                with col_metrics1:
+                    st.metric(
+                        label="AI予測値",
+                        value=f"{ai_avg_error:.2%}",
+                        help="AI予測値の平均絶対誤差率"
+                    )
+                    
+                with col_metrics2:
+                    st.metric(
+                        label="計画値01",
+                        value=f"{plan01_avg_error:.2%}",
+                        help="計画値01の平均絶対誤差率"
+                    )
+                
+                # 計画値02がある場合
+                if plan02_avg_error is not None:
+                    st.metric(
+                        label="計画値02",
+                        value=f"{plan02_avg_error:.2%}",
+                        help="計画値02の平均絶対誤差率"
+                    )
+                
+                # 差分表示
+                st.markdown("---")
+                st.metric(
+                    label="差分（AI vs 計画値01）",
+                    value=f"{diff_value:.2%}",
+                    help="AI予測値と計画値01の平均絶対誤差率の差",
+                    delta=f"{-diff_value:.2%}" if ai_avg_error < plan01_avg_error else f"{diff_value:.2%}"
+                )
             
             # コンテナを閉じる
             st.markdown("</div>", unsafe_allow_html=True)

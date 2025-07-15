@@ -10,7 +10,7 @@ from config.ui_styles import HELP_TEXTS
 def show():
     """月次推移折れ線グラフ一覧ページを表示"""
     
-    # CSSスタイル
+    # CSSスタイル（UI/UXデザイン統一ガイドライン準拠）
     st.markdown("""
     <style>
     /* セクションヘッダー */
@@ -38,21 +38,34 @@ def show():
         line-height: 1.6;
     }
 
-    /* フィルターエリア */
-    .filter-container {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin-bottom: 2rem;
-        border: 1px solid #e9ecef;
+    /* STEP見出し（青線付きタイトル） */
+    .step-title {
+        font-size: 1.4em;
+        font-weight: bold;
+        color: #1976d2;
+        border-left: 4px solid #1976d2;
+        padding-left: 12px;
+        margin-bottom: 1em;
+        margin-top: 2em;
     }
 
-    .filter-title {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #495057;
-        margin-bottom: 1rem;
+    /* STEP注釈・説明文 */
+    .step-annotation {
+        color: #666666;
+        font-size: 0.95em;
+        margin-bottom: 1.2em;
     }
+
+    /* 中項目・セクション小見出し */
+    .section-subtitle {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 0.8em;
+        margin-top: 1.2em;
+    }
+
+
 
     /* グラフエリア */
     .graph-container {
@@ -147,15 +160,24 @@ def show():
         # フィルター設定
         filter_config = create_filter_ui(df)
         
-        # データフィルタリング
-        filtered_products = apply_filters(df, filter_config)
-        
-        if not filtered_products:
-            st.warning("⚠️ フィルター条件に該当する商品コードがありません。")
+        # フィルター設定が有効な場合のみ処理続行
+        if filter_config is None:
             return
         
-        # グラフ表示
-        display_monthly_trend_graphs(df, filtered_products, filter_config)
+        # グラフ出力ボタン
+        if st.button("月次推移折れ線グラフ一覧を出力する", type="primary", use_container_width=True):
+            # データフィルタリング
+            filtered_products = apply_filters(df, filter_config)
+            
+            if not filtered_products:
+                st.warning("⚠️ フィルター条件に該当する商品コードがありません。")
+                return
+            
+            # 月次推移折れ線グラフ一覧の見出し（ボタン直下に追加）
+            st.markdown('<div class="step-title">月次推移折れ線グラフ一覧</div>', unsafe_allow_html=True)
+            
+            # グラフ表示
+            display_monthly_trend_graphs(df, filtered_products, filter_config)
         
     except Exception as e:
         st.error(f"エラーが発生しました: {str(e)}")
@@ -164,142 +186,234 @@ def show():
         st.write(f"列名: {list(df.columns)}")
 
 def create_filter_ui(df):
-    """フィルター設定UIを作成"""
+    """出力対象フィルターUIを作成"""
     
-    st.markdown("""
-    <div class="filter-container">
-        <div class="filter-title">🔍 フィルター設定</div>
-    </div>
-    """, unsafe_allow_html=True)
+    # セッション状態の初期化（状態保持用）
+    if 'monthly_trend_filter' not in st.session_state:
+        st.session_state.monthly_trend_filter = {
+            'category_filter': '全て',
+            'abc_filter': [],
+            'comparison_items': ['AI_pred', 'Plan_01'],
+            'comparison_direction': 0,
+            'diff_threshold': 0.1,
+            'diff_input': 0.1,
+            'sort_order': '降順（差分の大きい順）',
+            'max_display': 20
+        }
     
-    # フィルター設定のコンテナ
-    with st.container():
-        # 分類・ABC区分フィルター
-        st.subheader("基本フィルター")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 分類フィルター
-            if 'category_code' in df.columns and not df['category_code'].isna().all():
-                category_options = ['全て'] + sorted(df['category_code'].dropna().unique().tolist())
-                selected_category = st.selectbox(
-                    "分類",
-                    category_options,
-                    index=0,
-                    key="category_filter"
-                )
-            else:
-                selected_category = '全て'
-                st.info("分類情報がありません")
-        
-        with col2:
-            # ABC区分フィルター
-            if 'Class_abc' in df.columns and not df['Class_abc'].isna().all():
-                abc_options = sorted(df['Class_abc'].dropna().unique().tolist())
-                selected_abc = st.multiselect(
-                    "ABC区分（複数選択可）",
-                    abc_options,
-                    default=abc_options,
-                    key="abc_filter"
-                )
-            else:
-                selected_abc = []
-                st.info("ABC区分情報がありません")
-        
-        # 比較対象の選択
-        st.subheader("比較対象")
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            ai_vs_plan01 = st.checkbox("AI予測値 vs 計画値01", value=True, key="ai_vs_plan01")
-            ai_vs_plan02 = st.checkbox("AI予測値 vs 計画値02", value=False, key="ai_vs_plan02")
-        
-        with col4:
-            plan01_vs_plan02 = st.checkbox("計画値01 vs 計画値02", value=False, key="plan01_vs_plan02")
-        
-        # 比較方向の選択
-        st.subheader("比較方向")
-        comparison_direction = st.selectbox(
-            "フィルター条件",
-            [
-                "AI予測値の誤差率 ＜ 計画値01の誤差率",
-                "AI予測値の誤差率 ＞ 計画値01の誤差率",
-                "AI予測値の誤差率 ＜ 計画値02の誤差率",
-                "AI予測値の誤差率 ＞ 計画値02の誤差率"
-            ],
-            key="comparison_direction"
+    # 出力対象フィルター見出し（セクション見出しとして統一）
+    st.markdown('<div class="step-title">出力対象フィルター</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">以下の条件で出力対象を絞り込んでください。</div>', unsafe_allow_html=True)
+    
+    # 基本条件
+    st.markdown('<div class="section-subtitle">基本条件</div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # 分類フィルター
+        if 'category_code' in df.columns and not df['category_code'].isna().all():
+            category_options = ['全て'] + sorted(df['category_code'].dropna().unique().tolist())
+            
+            # 保存された状態を初期値として使用
+            default_index = 0
+            if st.session_state.monthly_trend_filter['category_filter'] in category_options:
+                default_index = category_options.index(st.session_state.monthly_trend_filter['category_filter'])
+            
+            selected_category = st.selectbox(
+                "分類",
+                category_options,
+                index=default_index,
+                key="category_filter_ui"
+            )
+            # 状態を保存
+            st.session_state.monthly_trend_filter['category_filter'] = selected_category
+        else:
+            selected_category = '全て'
+            st.info("分類情報がありません")
+    
+    with col2:
+        # ABC区分フィルター
+        if 'Class_abc' in df.columns and not df['Class_abc'].isna().all():
+            abc_options = sorted(df['Class_abc'].dropna().unique().tolist())
+            
+            # 保存された状態を初期値として使用
+            default_abc = st.session_state.monthly_trend_filter['abc_filter']
+            if not default_abc:
+                default_abc = abc_options
+            
+            selected_abc = st.multiselect(
+                "ABC区分（複数選択可）",
+                abc_options,
+                default=default_abc,
+                key="abc_filter_ui"
+            )
+            # 状態を保存
+            st.session_state.monthly_trend_filter['abc_filter'] = selected_abc
+        else:
+            selected_abc = []
+            st.info("ABC区分情報がありません")
+    
+    # 比較対象（2項目選択に限定）
+    st.markdown('<div class="section-subtitle">比較対象</div>', unsafe_allow_html=True)
+    
+    # 項目名カスタマイズの取得
+    mapping = st.session_state.get('mapping', {})
+    
+    # 利用可能な項目とその表示名
+    available_items = []
+    item_display_names = {}
+    
+    # AI予測値
+    ai_display_name = mapping.get('AI_pred', 'AI予測値')
+    available_items.append('AI_pred')
+    item_display_names['AI_pred'] = ai_display_name
+    
+    # 計画値01
+    plan01_display_name = mapping.get('Plan_01', '計画値01')
+    available_items.append('Plan_01')
+    item_display_names['Plan_01'] = plan01_display_name
+    
+    # 計画値02（存在する場合のみ選択可能）
+    if 'Plan_02' in df.columns:
+        plan02_display_name = mapping.get('Plan_02', '計画値02')
+        available_items.append('Plan_02')
+        item_display_names['Plan_02'] = plan02_display_name
+    
+    # 比較対象の選択（2項目限定）
+    # 保存された状態を初期値として使用
+    default_items = st.session_state.monthly_trend_filter['comparison_items']
+    # 存在しない項目は除外
+    default_items = [item for item in default_items if item in available_items]
+    if len(default_items) != 2:
+        default_items = ['AI_pred', 'Plan_01']
+    
+    # 表示用のラベルを作成
+    item_labels = [item_display_names[item] for item in available_items]
+    label_text = f"{ai_display_name}、{plan01_display_name}"
+    if 'Plan_02' in available_items:
+        label_text += f"、{plan02_display_name}"
+    label_text += "から任意の2項目を選択（2者比較に限定）"
+    
+    selected_items = st.multiselect(
+        label_text,
+        available_items,
+        default=default_items,
+        max_selections=2,
+        format_func=lambda x: item_display_names[x],
+        key="comparison_items_ui"
+    )
+    # 状態を保存
+    st.session_state.monthly_trend_filter['comparison_items'] = selected_items
+    
+    if len(selected_items) != 2:
+        st.warning("⚠️ 比較対象は必ず2項目を選択してください。")
+        return None
+    
+    # 比較方向（選択された項目に応じて動的に変更）
+    st.markdown('<div class="section-subtitle">比較方向</div>', unsafe_allow_html=True)
+    
+    item1_name = item_display_names[selected_items[0]]
+    item2_name = item_display_names[selected_items[1]]
+    
+    # 保存された状態を初期値として使用
+    default_direction_index = st.session_state.monthly_trend_filter['comparison_direction']
+    
+    comparison_direction = st.selectbox(
+        "フィルター条件",
+        [
+            f"{item1_name} ＞ {item2_name}",
+            f"{item1_name} ＜ {item2_name}"
+        ],
+        index=default_direction_index,
+        key="comparison_direction_ui"
+    )
+    # 状態を保存
+    direction_options = [f"{item1_name} ＞ {item2_name}", f"{item1_name} ＜ {item2_name}"]
+    st.session_state.monthly_trend_filter['comparison_direction'] = direction_options.index(comparison_direction)
+    
+    # 差分ポイント設定
+    st.markdown('<div class="section-subtitle">差分ポイント設定</div>', unsafe_allow_html=True)
+    col5, col6 = st.columns(2)
+    
+    with col5:
+        diff_threshold = st.slider(
+            "差分閾値（0.1 = 10ポイント差）",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.monthly_trend_filter['diff_threshold'],
+            step=0.01,
+            format="%.2f",
+            key="diff_threshold_ui",
+            help="例：0.1 = 10ポイント差（30%と20%の差）"
         )
+        # 状態を保存
+        st.session_state.monthly_trend_filter['diff_threshold'] = diff_threshold
+    
+    with col6:
+        diff_input = st.number_input(
+            "数値入力（0.1 = 10ポイント差）",
+            min_value=0.0,
+            max_value=1.0,
+            value=st.session_state.monthly_trend_filter['diff_input'],
+            step=0.01,
+            format="%.2f",
+            key="diff_input_ui",
+            help="例：0.1 = 10ポイント差（30%と20%の差）"
+        )
+        # 状態を保存
+        st.session_state.monthly_trend_filter['diff_input'] = diff_input
+    
+    # 実際の差分値を決定（スライダーと数値入力の同期）
+    actual_diff = diff_input if diff_input != 0.1 else diff_threshold
+    
+    # 表示順
+    st.markdown('<div class="section-subtitle">表示順</div>', unsafe_allow_html=True)
+    col7, col8 = st.columns(2)
+    
+    with col7:
+        sort_order_options = ["降順（差分の大きい順）", "昇順（差分の小さい順）"]
+        default_sort_index = 0
+        if st.session_state.monthly_trend_filter['sort_order'] in sort_order_options:
+            default_sort_index = sort_order_options.index(st.session_state.monthly_trend_filter['sort_order'])
         
-        # 差分ポイント設定
-        st.subheader("差分ポイント設定")
-        col5, col6 = st.columns(2)
-        
-        with col5:
-            diff_threshold = st.slider(
-                "差分閾値（0.1 = 10ポイント差）",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.1,
-                step=0.01,
-                format="%.2f",
-                key="diff_threshold",
-                help="例：0.1 = 10ポイント差（30%と20%の差）"
-            )
-        
-        with col6:
-            diff_input = st.number_input(
-                "数値入力（0.1 = 10ポイント差）",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.1,
-                step=0.01,
-                format="%.2f",
-                key="diff_input",
-                help="例：0.1 = 10ポイント差（30%と20%の差）"
-            )
-        
-        # 実際の差分値を決定（スライダーと数値入力の同期）
-        actual_diff = diff_input if diff_input != 0.1 else diff_threshold
-        
-        # 表示順選択
-        st.subheader("表示順")
-        col7, col8 = st.columns(2)
-        
-        with col7:
-            sort_order = st.selectbox(
-                "並び順",
-                ["降順（差分の大きい順）", "昇順（差分の小さい順）"],
-                key="sort_order"
-            )
-        
-        with col8:
-            # 表示件数制限
-            max_display = st.slider(
-                "最大表示件数",
-                min_value=5,
-                max_value=100,
-                value=20,
-                step=5,
-                key="max_display"
-            )
+        sort_order = st.selectbox(
+            "並び順",
+            sort_order_options,
+            index=default_sort_index,
+            key="sort_order_ui"
+        )
+        # 状態を保存
+        st.session_state.monthly_trend_filter['sort_order'] = sort_order
+    
+    with col8:
+        # 表示件数制限
+        max_display = st.slider(
+            "最大表示件数",
+            min_value=5,
+            max_value=100,
+            value=st.session_state.monthly_trend_filter['max_display'],
+            step=5,
+            key="max_display_ui"
+        )
+        # 状態を保存
+        st.session_state.monthly_trend_filter['max_display'] = max_display
     
     return {
         'selected_category': selected_category,
         'selected_abc': selected_abc,
-        'ai_vs_plan01': ai_vs_plan01,
-        'ai_vs_plan02': ai_vs_plan02,
-        'plan01_vs_plan02': plan01_vs_plan02,
+        'selected_items': selected_items,
         'comparison_direction': comparison_direction,
         'diff_threshold': actual_diff,
         'sort_order': sort_order,
-        'max_display': max_display
+        'max_display': max_display,
+        'item_display_names': item_display_names
     }
 
 def apply_filters(df, filter_config):
     """フィルター条件に基づいて商品コードを抽出"""
     
     # 必要な列が存在するかチェック
-    required_columns = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
+    required_columns = ['P_code', 'Date', 'Actual'] + filter_config['selected_items']
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         st.error(f"必要な列が不足しています: {missing_columns}")
@@ -316,71 +430,50 @@ def apply_filters(df, filter_config):
     if filter_config['selected_abc'] and 'Class_abc' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['Class_abc'].isin(filter_config['selected_abc'])]
     
-    # Plan_02の存在チェック
-    has_plan02 = 'Plan_02' in df.columns
-    
     # 商品コード別の平均絶対誤差率を計算
     product_error_rates = {}
+    selected_items = filter_config['selected_items']
     
     for product_code in filtered_df['P_code'].unique():
         product_data = filtered_df[filtered_df['P_code'] == product_code].copy()
         
-        # AI予測値の誤差率
-        ai_errors = calculate_error_rates(product_data, 'AI_pred', 'Actual')
-        ai_avg_error = calculate_weighted_average_error_rate(ai_errors, 'absolute_error_rate', 'Actual')
+        # 各項目の誤差率を計算
+        item_errors = {}
+        for item in selected_items:
+            errors = calculate_error_rates(product_data, item, 'Actual')
+            avg_error = calculate_weighted_average_error_rate(errors, 'absolute_error_rate', 'Actual')
+            item_errors[item] = avg_error
         
-        # 計画値01の誤差率
-        plan01_errors = calculate_error_rates(product_data, 'Plan_01', 'Actual')
-        plan01_avg_error = calculate_weighted_average_error_rate(plan01_errors, 'absolute_error_rate', 'Actual')
-        
-        # 計画値02の誤差率（存在する場合）
-        plan02_avg_error = None
-        if has_plan02:
-            plan02_errors = calculate_error_rates(product_data, 'Plan_02', 'Actual')
-            plan02_avg_error = calculate_weighted_average_error_rate(plan02_errors, 'absolute_error_rate', 'Actual')
-        
-        product_error_rates[product_code] = {
-            'ai_error': ai_avg_error,
-            'plan01_error': plan01_avg_error,
-            'plan02_error': plan02_avg_error
-        }
+        product_error_rates[product_code] = item_errors
     
     # フィルター条件に基づいて商品コードを抽出
     filtered_products = []
     comparison_direction = filter_config['comparison_direction']
     threshold = filter_config['diff_threshold']
     
+    # 項目名の表示名を取得
+    item_display_names = filter_config['item_display_names']
+    item1_name = item_display_names[selected_items[0]]
+    item2_name = item_display_names[selected_items[1]]
+    
     for product_code, errors in product_error_rates.items():
-        ai_error = errors['ai_error']
-        plan01_error = errors['plan01_error']
-        plan02_error = errors['plan02_error']
+        item1_error = errors[selected_items[0]]
+        item2_error = errors[selected_items[1]]
         
         # NaN値のチェック
-        if pd.isna(ai_error) or pd.isna(plan01_error):
+        if pd.isna(item1_error) or pd.isna(item2_error):
             continue
         
         # 条件判定
-        if comparison_direction == "AI予測値の誤差率 ＜ 計画値01の誤差率":
-            if (plan01_error - ai_error) >= threshold:
-                diff_value = plan01_error - ai_error
+        if comparison_direction == f"{item1_name} ＞ {item2_name}":
+            if (item1_error - item2_error) >= threshold:
+                diff_value = item1_error - item2_error
                 filtered_products.append((product_code, diff_value))
         
-        elif comparison_direction == "AI予測値の誤差率 ＞ 計画値01の誤差率":
-            if (ai_error - plan01_error) >= threshold:
-                diff_value = ai_error - plan01_error
+        elif comparison_direction == f"{item1_name} ＜ {item2_name}":
+            if (item2_error - item1_error) >= threshold:
+                diff_value = item2_error - item1_error
                 filtered_products.append((product_code, diff_value))
-        
-        elif comparison_direction == "AI予測値の誤差率 ＜ 計画値02の誤差率":
-            if plan02_error is not None and not pd.isna(plan02_error):
-                if (plan02_error - ai_error) >= threshold:
-                    diff_value = plan02_error - ai_error
-                    filtered_products.append((product_code, diff_value))
-        
-        elif comparison_direction == "AI予測値の誤差率 ＞ 計画値02の誤差率":
-            if plan02_error is not None and not pd.isna(plan02_error):
-                if (ai_error - plan02_error) >= threshold:
-                    diff_value = ai_error - plan02_error
-                    filtered_products.append((product_code, diff_value))
     
     # 並び順の適用
     if filter_config['sort_order'] == "降順（差分の大きい順）":
@@ -412,12 +505,9 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
         'Actual': mapping.get('Actual', COLUMN_MAPPING.get('Actual', '実績値'))
     }
     
-    # 結果表示
-    st.subheader(f"📊 月次推移グラフ（{len(filtered_products)}件）")
-    
     # フィルター条件の表示
     threshold_percent = filter_config['diff_threshold'] * 100
-    st.info(f"フィルター条件: {filter_config['comparison_direction']} （差分閾値: {threshold_percent:.0f}ポイント以上）")
+    st.info(f"フィルター条件: {filter_config['comparison_direction']} （差分閾値: {threshold_percent:.0f}ポイント以上）　表示件数: {len(filtered_products)}件")
     
     # 各商品コードのグラフを表示
     for i, product_code in enumerate(filtered_products):
@@ -432,18 +522,18 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
         if 'Date' in product_data.columns:
             product_data = product_data.sort_values('Date')
         
-        # 誤差率を計算
-        ai_errors = calculate_error_rates(product_data, 'AI_pred', 'Actual')
-        plan01_errors = calculate_error_rates(product_data, 'Plan_01', 'Actual')
+        # 選択された項目の誤差率を計算
+        selected_items = filter_config['selected_items']
+        item_display_names = filter_config['item_display_names']
+        item_errors = {}
         
-        ai_avg_error = calculate_weighted_average_error_rate(ai_errors, 'absolute_error_rate', 'Actual')
-        plan01_avg_error = calculate_weighted_average_error_rate(plan01_errors, 'absolute_error_rate', 'Actual')
+        for item in selected_items:
+            errors = calculate_error_rates(product_data, item, 'Actual')
+            avg_error = calculate_weighted_average_error_rate(errors, 'absolute_error_rate', 'Actual')
+            item_errors[item] = avg_error
         
-        # 計画値02の誤差率（存在する場合）
-        plan02_avg_error = None
-        if 'Plan_02' in product_data.columns:
-            plan02_errors = calculate_error_rates(product_data, 'Plan_02', 'Actual')
-            plan02_avg_error = calculate_weighted_average_error_rate(plan02_errors, 'absolute_error_rate', 'Actual')
+        # 差分を計算
+        diff_value = abs(item_errors[selected_items[0]] - item_errors[selected_items[1]])
         
         # グラフコンテナ
         with st.container():
@@ -561,41 +651,30 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
                 # 誤差率情報をStreamlitの標準コンポーネントで表示
                 st.markdown("**月平均誤差率**")
                 
-                # 差分を計算（パーセンテージポイントで計算）
-                diff_value = abs(ai_avg_error - plan01_avg_error)
-                
                 # メトリクス表示
                 col_metrics1, col_metrics2 = st.columns(2)
                 
                 with col_metrics1:
                     st.metric(
-                        label="AI予測値",
-                        value=f"{ai_avg_error:.2%}",
-                        help="AI予測値の平均絶対誤差率"
+                        label=item_display_names[selected_items[0]],
+                        value=f"{item_errors[selected_items[0]]:.2%}",
+                        help=f"{item_display_names[selected_items[0]]}の平均絶対誤差率"
                     )
                     
                 with col_metrics2:
                     st.metric(
-                        label="計画値01",
-                        value=f"{plan01_avg_error:.2%}",
-                        help="計画値01の平均絶対誤差率"
-                    )
-                
-                # 計画値02がある場合
-                if plan02_avg_error is not None:
-                    st.metric(
-                        label="計画値02",
-                        value=f"{plan02_avg_error:.2%}",
-                        help="計画値02の平均絶対誤差率"
+                        label=item_display_names[selected_items[1]],
+                        value=f"{item_errors[selected_items[1]]:.2%}",
+                        help=f"{item_display_names[selected_items[1]]}の平均絶対誤差率"
                     )
                 
                 # 差分表示
                 st.markdown("---")
                 st.metric(
-                    label="差分（AI vs 計画値01）",
+                    label=f"差分（{item_display_names[selected_items[0]]} vs {item_display_names[selected_items[1]]}）",
                     value=f"{diff_value:.2%}",
-                    help="AI予測値と計画値01の平均絶対誤差率の差",
-                    delta=f"{-diff_value:.2%}" if ai_avg_error < plan01_avg_error else f"{diff_value:.2%}"
+                    help=f"{item_display_names[selected_items[0]]}と{item_display_names[selected_items[1]]}の平均絶対誤差率の差",
+                    delta=f"{-diff_value:.2%}" if item_errors[selected_items[0]] < item_errors[selected_items[1]] else f"{diff_value:.2%}"
                 )
             
             # コンテナを閉じる

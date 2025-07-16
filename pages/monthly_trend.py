@@ -145,7 +145,7 @@ def show():
     st.markdown("""
     <div class="section-header-box">
         <h2>■ 月次推移折れ線グラフ一覧</h2>
-        <p>商品コード単位で AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。平均絶対誤差率の差に基づくフィルターで、AI予測の優位性を可視化します。</p>
+        <p>商品コード単位で、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の誤差率のポイント差を指定し、その条件に該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -186,7 +186,7 @@ def show():
         st.write(f"列名: {list(df.columns)}")
 
 def create_filter_ui(df):
-    """出力対象フィルターUIを作成"""
+    """可視化対象フィルターUIを作成"""
     
     # セッション状態の初期化（状態保持用）
     if 'monthly_trend_filter' not in st.session_state:
@@ -201,12 +201,12 @@ def create_filter_ui(df):
             'max_display': 20
         }
     
-    # 出力対象フィルター見出し（セクション見出しとして統一）
-    st.markdown('<div class="step-title">出力対象フィルター</div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-annotation">以下の条件で出力対象を絞り込んでください。</div>', unsafe_allow_html=True)
+    # 可視化対象フィルター見出し（セクション見出しとして統一）
+    st.markdown('<div class="step-title">可視化対象フィルター</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">以下の条件で可視化対象を絞り込んでください。</div>', unsafe_allow_html=True)
     
-    # 基本条件
-    st.markdown('<div class="section-subtitle">基本条件</div>', unsafe_allow_html=True)
+    # 分類およびABC区分の選択
+    st.markdown('<div class="section-subtitle">分類およびABC区分の選択</div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
     
     with col1:
@@ -256,26 +256,26 @@ def create_filter_ui(df):
     # 比較対象（2項目選択に限定）
     st.markdown('<div class="section-subtitle">比較対象</div>', unsafe_allow_html=True)
     
-    # 項目名カスタマイズの取得
-    mapping = st.session_state.get('mapping', {})
+    # 項目名カスタマイズの取得（upload.pyのcustom_column_names対応）
+    custom_names = st.session_state.get('custom_column_names', {})
     
     # 利用可能な項目とその表示名
     available_items = []
     item_display_names = {}
     
     # AI予測値
-    ai_display_name = mapping.get('AI_pred', 'AI予測値')
+    ai_display_name = custom_names.get('AI_pred', 'AI予測値')
     available_items.append('AI_pred')
     item_display_names['AI_pred'] = ai_display_name
     
     # 計画値01
-    plan01_display_name = mapping.get('Plan_01', '計画値01')
+    plan01_display_name = custom_names.get('Plan_01', '計画値01')
     available_items.append('Plan_01')
     item_display_names['Plan_01'] = plan01_display_name
     
     # 計画値02（存在する場合のみ選択可能）
     if 'Plan_02' in df.columns:
-        plan02_display_name = mapping.get('Plan_02', '計画値02')
+        plan02_display_name = custom_names.get('Plan_02', '計画値02')
         available_items.append('Plan_02')
         item_display_names['Plan_02'] = plan02_display_name
     
@@ -287,7 +287,7 @@ def create_filter_ui(df):
     if len(default_items) != 2:
         default_items = ['AI_pred', 'Plan_01']
     
-    # 表示用のラベルを作成
+    # 表示用のラベルを作成（動的に生成）
     item_labels = [item_display_names[item] for item in available_items]
     label_text = f"{ai_display_name}、{plan01_display_name}"
     if 'Plan_02' in available_items:
@@ -319,7 +319,7 @@ def create_filter_ui(df):
     default_direction_index = st.session_state.monthly_trend_filter['comparison_direction']
     
     comparison_direction = st.selectbox(
-        "フィルター条件",
+        "予測精度の比較基準",
         [
             f"{item1_name} ＞ {item2_name}",
             f"{item1_name} ＜ {item2_name}"
@@ -494,15 +494,15 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
         st.warning("表示対象の商品コードがありません。")
         return
     
-    # 項目名カスタマイズの取得
-    mapping = st.session_state.get('mapping', {})
+    # 項目名カスタマイズの取得（upload.pyのcustom_column_names対応）
+    custom_names = st.session_state.get('custom_column_names', {})
     
     # 列名の表示用マッピング
     display_names = {
-        'AI_pred': mapping.get('AI_pred', COLUMN_MAPPING.get('AI_pred', 'AI予測値')),
-        'Plan_01': mapping.get('Plan_01', COLUMN_MAPPING.get('Plan_01', '計画値01')),
-        'Plan_02': mapping.get('Plan_02', COLUMN_MAPPING.get('Plan_02', '計画値02')),
-        'Actual': mapping.get('Actual', COLUMN_MAPPING.get('Actual', '実績値'))
+        'AI_pred': custom_names.get('AI_pred', COLUMN_MAPPING.get('AI_pred', 'AI予測値')),
+        'Plan_01': custom_names.get('Plan_01', COLUMN_MAPPING.get('Plan_01', '計画値01')),
+        'Plan_02': custom_names.get('Plan_02', COLUMN_MAPPING.get('Plan_02', '計画値02')),
+        'Actual': custom_names.get('Actual', COLUMN_MAPPING.get('Actual', '実績値'))
     }
     
     # フィルター条件の表示
@@ -522,6 +522,13 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
         if 'Date' in product_data.columns:
             product_data = product_data.sort_values('Date')
         
+        # ABC区分を取得（該当商品コードの最初の行から取得）
+        abc_class = ""
+        if 'Class_abc' in product_data.columns and not product_data['Class_abc'].isna().all():
+            abc_value = product_data['Class_abc'].iloc[0]
+            if pd.notna(abc_value) and str(abc_value) != '未区分':
+                abc_class = f"（{abc_value}区分）"
+        
         # 選択された項目の誤差率を計算
         selected_items = filter_config['selected_items']
         item_display_names = filter_config['item_display_names']
@@ -537,10 +544,10 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
         
         # グラフコンテナ
         with st.container():
-            # 商品コードタイトル
+            # 商品コードタイトル（ABC区分を併記）
             st.markdown(f"""
             <div class="graph-container">
-                <div class="product-code-title">商品コード：{product_code}</div>
+                <div class="product-code-title">商品コード：{product_code}{abc_class}</div>
             """, unsafe_allow_html=True)
             
             # 横並びレイアウト
@@ -648,34 +655,57 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
                 st.plotly_chart(fig, use_container_width=True)
             
             with col_error:
-                # 誤差率情報をStreamlitの標準コンポーネントで表示
-                st.markdown("**月平均誤差率**")
+                # 比較対象名を6文字で省略
+                def truncate_name(name, max_length=6):
+                    if len(name) > max_length:
+                        return name[:max_length] + '…'
+                    return name
                 
-                # メトリクス表示
-                col_metrics1, col_metrics2 = st.columns(2)
+                item1_name = truncate_name(item_display_names[selected_items[0]])
+                item2_name = truncate_name(item_display_names[selected_items[1]])
                 
-                with col_metrics1:
-                    st.metric(
-                        label=item_display_names[selected_items[0]],
-                        value=f"{item_errors[selected_items[0]]:.2%}",
-                        help=f"{item_display_names[selected_items[0]]}の平均絶対誤差率"
-                    )
-                    
-                with col_metrics2:
-                    st.metric(
-                        label=item_display_names[selected_items[1]],
-                        value=f"{item_errors[selected_items[1]]:.2%}",
-                        help=f"{item_display_names[selected_items[1]]}の平均絶対誤差率"
-                    )
+                # 比較方向を判定して符号を決定
+                comparison_direction = filter_config['comparison_direction']
+                item1_error = item_errors[selected_items[0]]
+                item2_error = item_errors[selected_items[1]]
                 
-                # 差分表示
-                st.markdown("---")
-                st.metric(
-                    label=f"差分（{item_display_names[selected_items[0]]} vs {item_display_names[selected_items[1]]}）",
-                    value=f"{diff_value:.2%}",
-                    help=f"{item_display_names[selected_items[0]]}と{item_display_names[selected_items[1]]}の平均絶対誤差率の差",
-                    delta=f"{-diff_value:.2%}" if item_errors[selected_items[0]] < item_errors[selected_items[1]] else f"{diff_value:.2%}"
-                )
+                # 差分値と符号を計算
+                if "＞" in comparison_direction:
+                    diff_with_sign = item1_error - item2_error
+                    sign_symbol = "＋" if diff_with_sign >= 0 else "ー"
+                else:  # "＜"の場合
+                    diff_with_sign = item2_error - item1_error
+                    sign_symbol = "＋" if diff_with_sign >= 0 else "ー"
+                
+                # 横並びレイアウトで表示
+                st.markdown("""
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.8rem; text-align: center;">
+                        月平均誤差率
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <div style="text-align: center; flex: 1;">
+                            <div style="font-size: 0.85rem; color: #495057; margin-bottom: 0.2rem;">{}</div>
+                            <div style="font-size: 0.9rem; font-weight: 500; color: #007bff;">{:.2%}</div>
+                        </div>
+                        <div style="text-align: center; flex: 1;">
+                            <div style="font-size: 0.85rem; color: #495057; margin-bottom: 0.2rem;">{}</div>
+                            <div style="font-size: 0.9rem; font-weight: 500; color: #007bff;">{:.2%}</div>
+                        </div>
+                        <div style="text-align: center; flex: 1;">
+                            <div style="font-size: 0.85rem; color: #495057; margin-bottom: 0.2rem;">差分</div>
+                            <div style="font-size: 0.9rem; font-weight: bold; color: #28a745;">{}{:.2%}</div>
+                        </div>
+                    </div>
+                </div>
+                """.format(
+                    item1_name, 
+                    item1_error, 
+                    item2_name, 
+                    item2_error,
+                    sign_symbol, 
+                    abs(diff_with_sign)
+                ), unsafe_allow_html=True)
             
             # コンテナを閉じる
             st.markdown("</div>", unsafe_allow_html=True)

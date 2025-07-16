@@ -145,7 +145,27 @@ def show():
     st.markdown("""
     <div class="section-header-box">
         <h2>■ 月次推移折れ線グラフ一覧</h2>
-        <p>商品コード単位で、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の誤差率のポイント差を指定し、その条件に該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
+        <p>商品コード単位で、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の<strong>月平均_絶対誤差率</strong>（詳細は注釈を参照）のポイント差を指定し、その条件に該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 月平均_絶対誤差率の注釈
+    st.markdown("""
+    <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+        <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
+            <strong>【月平均_絶対誤差率とは】</strong><br>
+            各月の絶対誤差率を月別実績値で重みづけして算出した加重平均値です。<br>
+            <br>
+            <strong>【事例】</strong>商品コード WA-AA07HJA-MBN9<br>
+            ├── 2025年3月：実績10、AI予測8　 → 絶対誤差率20%<br>
+            ├── 2025年4月：実績15、AI予測12 → 絶対誤差率20%<br>
+            └── 2025年5月：実績20、AI予測18 → 絶対誤差率10%<br>
+            <br>
+            <strong>【加重平均】</strong>：(20%×10 + 20%×15 + 10%×20) ÷ (10+15+20) = 700 ÷ 45 ≒ 15.6%<br>
+            <strong>【単純平均】</strong>：(20% + 20% + 10%) ÷ 3 = 16.7%<br>
+            <br>
+            ※ 実績値の大きい月により重きを置いた平均値となるため、より実用的な精度評価が可能です。
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -309,8 +329,8 @@ def create_filter_ui(df):
         st.warning("⚠️ 比較対象は必ず2項目を選択してください。")
         return None
     
-    # 比較方向（選択された項目に応じて動的に変更）
-    st.markdown('<div class="section-subtitle">比較方向</div>', unsafe_allow_html=True)
+    # 月平均_絶対誤差率の比較基準（選択された項目に応じて動的に変更）
+    st.markdown('<div class="section-subtitle">月平均_絶対誤差率の比較基準</div>', unsafe_allow_html=True)
     
     item1_name = item_display_names[selected_items[0]]
     item2_name = item_display_names[selected_items[1]]
@@ -319,7 +339,7 @@ def create_filter_ui(df):
     default_direction_index = st.session_state.monthly_trend_filter['comparison_direction']
     
     comparison_direction = st.selectbox(
-        "予測精度の比較基準",
+        "比較方向",
         [
             f"{item1_name} ＞ {item2_name}",
             f"{item1_name} ＜ {item2_name}"
@@ -507,7 +527,7 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
     
     # フィルター条件の表示
     threshold_percent = filter_config['diff_threshold'] * 100
-    st.info(f"フィルター条件: {filter_config['comparison_direction']} （差分閾値: {threshold_percent:.0f}ポイント以上）　表示件数: {len(filtered_products)}件")
+    st.info(f"フィルター条件： {filter_config['comparison_direction']} （誤差率の差分： {threshold_percent:.0f}ポイント以上）　表示件数： {len(filtered_products)}件")
     
     # 各商品コードのグラフを表示
     for i, product_code in enumerate(filtered_products):
@@ -655,8 +675,8 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
                 st.plotly_chart(fig, use_container_width=True)
             
             with col_error:
-                # 比較対象名を6文字で省略
-                def truncate_name(name, max_length=6):
+                # 比較対象名を8文字で省略
+                def truncate_name(name, max_length=8):
                     if len(name) > max_length:
                         return name[:max_length] + '…'
                     return name
@@ -675,33 +695,39 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
                     sign_symbol = "＋" if diff_with_sign >= 0 else "ー"
                 else:  # "＜"の場合
                     diff_with_sign = item2_error - item1_error
-                    sign_symbol = "＋" if diff_with_sign >= 0 else "ー"
+                    sign_symbol = "▲" if diff_with_sign >= 0 else "▼"
                 
-                # 横並びレイアウトで表示
+                # 選択された項目に応じた色を取得
+                item1_color = COLOR_PALETTE.get(selected_items[0], '#007bff')
+                item2_color = COLOR_PALETTE.get(selected_items[1], '#007bff')
+                
+                # やや下に配置した横並びレイアウトで表示
                 st.markdown("""
-                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e9ecef;">
+                <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; border: 1px solid #e9ecef; margin-top: 4rem;">
                     <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.8rem; text-align: center;">
-                        月平均誤差率
+                        【<strong>月平均_絶対誤差率</strong>】
                     </div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                         <div style="text-align: center; flex: 1;">
                             <div style="font-size: 0.85rem; color: #495057; margin-bottom: 0.2rem;">{}</div>
-                            <div style="font-size: 0.9rem; font-weight: 500; color: #007bff;">{:.2%}</div>
+                            <div style="font-size: 0.9rem; font-weight: 500; color: {};">{:.2%}</div>
                         </div>
                         <div style="text-align: center; flex: 1;">
                             <div style="font-size: 0.85rem; color: #495057; margin-bottom: 0.2rem;">{}</div>
-                            <div style="font-size: 0.9rem; font-weight: 500; color: #007bff;">{:.2%}</div>
+                            <div style="font-size: 0.9rem; font-weight: 500; color: {};">{:.2%}</div>
                         </div>
                         <div style="text-align: center; flex: 1;">
-                            <div style="font-size: 0.85rem; color: #495057; margin-bottom: 0.2rem;">差分</div>
-                            <div style="font-size: 0.9rem; font-weight: bold; color: #28a745;">{}{:.2%}</div>
+                            <div style="font-size: 0.85rem; color: #000000; margin-bottom: 0.2rem;">差分</div>
+                            <div style="font-size: 1rem; font-weight: bold; color: #000000;">{}{:.2%}</div>
                         </div>
                     </div>
                 </div>
                 """.format(
                     item1_name, 
+                    item1_color,
                     item1_error, 
                     item2_name, 
+                    item2_color,
                     item2_error,
                     sign_symbol, 
                     abs(diff_with_sign)

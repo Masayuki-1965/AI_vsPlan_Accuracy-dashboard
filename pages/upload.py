@@ -330,7 +330,7 @@ def show_step2():
     # マッピング結果の表示
     if st.session_state.mapping_completed:
         st.markdown('<div class="result-section">', unsafe_allow_html=True)
-        st.success("✅ マッピングを実施しました。下記に変換後のデータプレビューを表示します。")
+        st.success("✅ マッピングが完了しました。変換後のデータプレビューを下記に表示していますので、ご確認ください。")
         
         # 変換後データプレビュー
         st.markdown('<div class="section-subtitle">変換後データプレビュー（上位5件）</div>', unsafe_allow_html=True)
@@ -385,7 +385,7 @@ def show_step3():
     # 結果表示
     if st.session_state.monthly_correction_completed:
         st.markdown('<div class="result-section">', unsafe_allow_html=True)
-        st.success("✅ 年月別データ集計結果：月別合計値補正を実施した場合は、AI予測および計画値の月別合計が一致しているかをご確認ください。")
+        st.success("✅ 年月別データの集計結果です。月別合計値補正を実施した場合は、AI予測値と計画値の月別合計が一致しているかをご確認ください。")
         
         # 分類フィルター（エラー防止強化版）
         selected_category = '全て'  # デフォルト値
@@ -558,7 +558,7 @@ def show_step4():
     # 結果表示
     if st.session_state.abc_generation_completed:
         st.markdown('<div class="result-section">', unsafe_allow_html=True)
-        st.success("✅ ABC区分集計結果")
+        st.success("✅ ABC区分の集計結果です。分類単位で内容を確認のうえ、必要に応じて分類フィルターで対象を選択し、ABC区分の自動生成を繰り返し実行してください。")
         
         # ABC区分集計結果の表示
         show_abc_generation_results()

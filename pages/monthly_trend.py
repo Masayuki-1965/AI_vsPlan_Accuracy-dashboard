@@ -145,7 +145,7 @@ def show():
     st.markdown("""
     <div class="section-header-box">
         <h2>■ 月次推移折れ線グラフ一覧</h2>
-        <p>商品コード単位で、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の<strong>月平均_絶対誤差率</strong>（詳細は注釈を参照）のポイント差を指定し、その条件に該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
+        <p>このセクションでは、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の<strong>月平均絶対誤差率</strong>（詳細は注釈参照）のポイント差を条件として指定し、それに該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -153,15 +153,15 @@ def show():
     st.markdown("""
     <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
         <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
-            <strong>【月平均_絶対誤差率とは】</strong><br>
+            <strong>【月平均絶対誤差率とは】</strong><br>
             各月の絶対誤差率を月別実績値で重みづけして算出した加重平均値です。<br>
             <br>
             <strong>【事例】</strong>商品コード WA-AA07HJA-MBN9<br>
-            ├── 2025年3月：実績10、AI予測8　 → 絶対誤差率20%<br>
+            ├── 2025年3月：実績10、AI予測 8 → 絶対誤差率20%<br>
             ├── 2025年4月：実績15、AI予測12 → 絶対誤差率20%<br>
             └── 2025年5月：実績20、AI予測18 → 絶対誤差率10%<br>
             <br>
-            <strong>【加重平均】</strong>：(20%×10 + 20%×15 + 10%×20) ÷ (10+15+20) = 700 ÷ 45 ≒ 15.6%<br>
+            <strong>【加重平均】</strong>：(20% × 10 + 20% × 15 + 10% × 20) ÷ (10 + 15 + 20) = 700 ÷ 45 ≒ 15.6%<br>
             <strong>【単純平均】</strong>：(20% + 20% + 10%) ÷ 3 = 16.7%<br>
             <br>
             ※ 実績値の大きい月により重きを置いた平均値となるため、より実用的な精度評価が可能です。
@@ -206,7 +206,7 @@ def show():
         st.write(f"列名: {list(df.columns)}")
 
 def create_filter_ui(df):
-    """可視化対象フィルターUIを作成"""
+    """抽出条件の設定（可視化対象）UIを作成"""
     
     # セッション状態の初期化（状態保持用）
     if 'monthly_trend_filter' not in st.session_state:
@@ -221,8 +221,8 @@ def create_filter_ui(df):
             'max_display': 20
         }
     
-    # 可視化対象フィルター見出し（セクション見出しとして統一）
-    st.markdown('<div class="step-title">可視化対象フィルター</div>', unsafe_allow_html=True)
+    # 抽出条件の設定（可視化対象）見出し（セクション見出しとして統一）
+    st.markdown('<div class="step-title">抽出条件の設定（可視化対象）</div>', unsafe_allow_html=True)
     st.markdown('<div class="step-annotation">以下の条件で可視化対象を絞り込んでください。</div>', unsafe_allow_html=True)
     
     # 分類およびABC区分の選択
@@ -741,5 +741,4 @@ def display_monthly_trend_graphs(df, filtered_products, filter_config):
                 st.markdown('<hr class="compact-divider">', unsafe_allow_html=True)
     
     # 集計情報の表示
-    st.subheader("📈 集計情報")
     st.info(f"表示件数: {len(filtered_products)} / 全商品コード数: {df['P_code'].nunique()}") 

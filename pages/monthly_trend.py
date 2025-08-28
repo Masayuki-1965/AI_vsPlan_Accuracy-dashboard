@@ -164,7 +164,7 @@ def show():
             <strong>【加重平均】</strong>：(20% × 10 + 20% × 15 + 10% × 20) ÷ (10 + 15 + 20) = 700 ÷ 45 ≒ 15.6%<br>
             <strong>【単純平均】</strong>：(20% + 20% + 10%) ÷ 3 = 16.7%<br>
             <br>
-            ※ 実績値の大きい月により重きを置いた平均値となるため、より実用的な精度評価が可能です。
+            ※ 実績値の大きい月を重みづけして平均することで、より実態に即した精度評価が可能です。
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -335,21 +335,71 @@ def create_filter_ui(df):
     item1_name = item_display_names[selected_items[0]]
     item2_name = item_display_names[selected_items[1]]
     
-    # 保存された状態を初期値として使用
-    default_direction_index = st.session_state.monthly_trend_filter['comparison_direction']
+    # AI予測値項目を特定（AIを含む項目名を検索）
+    ai_item = None
+    plan_item = None
+    for item in selected_items:
+        if 'AI' in item_display_names[item] or 'ai' in item_display_names[item] or 'ハイブリッド' in item_display_names[item]:
+            ai_item = item
+        else:
+            plan_item = item
     
-    comparison_direction = st.selectbox(
-        "比較方向",
-        [
-            f"{item1_name} ＞ {item2_name}",
-            f"{item1_name} ＜ {item2_name}"
-        ],
-        index=default_direction_index,
-        key="comparison_direction_ui"
-    )
-    # 状態を保存
-    direction_options = [f"{item1_name} ＞ {item2_name}", f"{item1_name} ＜ {item2_name}"]
+    # 保存された状態を初期値として使用（デフォルトは「AIの誤差率が低い」= index 0）
+    default_direction_index = st.session_state.monthly_trend_filter.get('comparison_direction', 0)
+    
+    # AI項目が特定できた場合は、AIを基準とした表示にする
+    if ai_item and plan_item:
+        ai_name = item_display_names[ai_item]
+        plan_name = item_display_names[plan_item]
+        
+        comparison_options = [
+            f"{ai_name} ＜ {plan_name} （AIの誤差率が低い）",
+            f"{ai_name} ＞ {plan_name} （AIの誤差率が高い）"
+        ]
+        
+        comparison_direction = st.selectbox(
+            "誤差率の大小",
+            comparison_options,
+            index=default_direction_index,
+            key="comparison_direction_ui",
+            help="どちらの誤差率が小さいか（＝精度が高いか）を選択してください"
+        )
+        
+        # 実際の比較方向を内部的に保存（元の形式に変換）
+        if "AIの誤差率が低い" in comparison_direction:
+            internal_direction = f"{ai_name} ＜ {plan_name}"
+        else:
+            internal_direction = f"{ai_name} ＞ {plan_name}"
+    else:
+        # AI項目が特定できない場合は従来の表示
+        comparison_options = [
+            f"{item1_name} ＜ {item2_name} （{item1_name}の誤差率が低い）",
+            f"{item1_name} ＞ {item2_name} （{item1_name}の誤差率が高い）"
+        ]
+        
+        comparison_direction = st.selectbox(
+            "誤差率の大小",
+            comparison_options,
+            index=default_direction_index,
+            key="comparison_direction_ui",
+            help="どちらの誤差率が小さいか（＝精度が高いか）を選択してください"
+        )
+        
+        # 実際の比較方向を内部的に保存
+        if "誤差率が低い" in comparison_direction:
+            internal_direction = f"{item1_name} ＜ {item2_name}"
+        else:
+            internal_direction = f"{item1_name} ＞ {item2_name}"
+    # 状態を保存（新しい選択肢のインデックスを保存）
+    if ai_item and plan_item:
+        direction_options = comparison_options
+    else:
+        direction_options = comparison_options
+    
     st.session_state.monthly_trend_filter['comparison_direction'] = direction_options.index(comparison_direction)
+    
+    # 内部処理用の比較方向も保存
+    st.session_state.monthly_trend_filter['internal_comparison_direction'] = internal_direction
     
     # 差分ポイント設定
     st.markdown('<div class="section-subtitle">差分ポイント設定</div>', unsafe_allow_html=True)
@@ -423,6 +473,7 @@ def create_filter_ui(df):
         'selected_abc': selected_abc,
         'selected_items': selected_items,
         'comparison_direction': comparison_direction,
+        'internal_comparison_direction': st.session_state.monthly_trend_filter.get('internal_comparison_direction', comparison_direction),
         'diff_threshold': actual_diff,
         'sort_order': sort_order,
         'max_display': max_display,
@@ -468,7 +519,8 @@ def apply_filters(df, filter_config):
     
     # フィルター条件に基づいて商品コードを抽出
     filtered_products = []
-    comparison_direction = filter_config['comparison_direction']
+    # 内部比較方向を使用（新しいUI表示に対応）
+    comparison_direction = filter_config.get('internal_comparison_direction', filter_config['comparison_direction'])
     threshold = filter_config['diff_threshold']
     
     # 項目名の表示名を取得
@@ -484,7 +536,7 @@ def apply_filters(df, filter_config):
         if pd.isna(item1_error) or pd.isna(item2_error):
             continue
         
-        # 条件判定
+        # 条件判定（内部比較方向を使用）
         if comparison_direction == f"{item1_name} ＞ {item2_name}":
             if (item1_error - item2_error) >= threshold:
                 diff_value = item1_error - item2_error

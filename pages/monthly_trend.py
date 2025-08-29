@@ -149,25 +149,68 @@ def show():
     </div>
     """, unsafe_allow_html=True)
     
-    # 月平均_絶対誤差率の注釈
-    st.markdown("""
-    <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+    # 月平均_絶対誤差率の注釈（展開式）
+    with st.expander("月平均_絶対誤差率とは", expanded=False):
+        st.markdown("""
         <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
-            <strong>【月平均絶対誤差率とは】</strong><br>
             各月の絶対誤差率を月別実績値で重みづけして算出した加重平均値です。<br>
             <br>
-            <strong>【事例】</strong>商品コード WA-AA07HJA-MBN9<br>
-            ├── 2025年3月：実績10、AI予測 8 → 絶対誤差率20%<br>
-            ├── 2025年4月：実績15、AI予測12 → 絶対誤差率20%<br>
-            └── 2025年5月：実績20、AI予測18 → 絶対誤差率10%<br>
-            <br>
-            <strong>【加重平均】</strong>：(20% × 10 + 20% × 15 + 10% × 20) ÷ (10 + 15 + 20) = 700 ÷ 45 ≒ 15.6%<br>
-            <strong>【単純平均】</strong>：(20% + 20% + 10%) ÷ 3 = 16.7%<br>
+            <strong>事例：商品コード WA-AA07HJA-MBN9</strong>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 事例の表形式表示
+        import pandas as pd
+        example_data = {
+            '': ['実績', '予測', '誤差', '絶対誤差率'],
+            '2025年3月': [10, 8, 2, '20%'],
+            '2025年4月': [15, 12, 3, '20%'],
+            '2025年5月': [20, 18, 2, '10%']
+        }
+        example_df = pd.DataFrame(example_data)
+        
+        # 表のスタイリング
+        st.markdown("""
+        <style>
+        .example-table {
+            font-size: 0.9rem;
+            margin: 1rem 0;
+        }
+        .example-table table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        .example-table th, .example-table td {
+            padding: 0.5rem;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+        .example-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        .example-table tbody tr:first-child {
+            font-weight: 600;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # データフレームを表として表示（横幅を制限して左詰め）
+        col1, col2 = st.columns([2, 3])
+        with col1:
+            st.markdown('<div class="example-table">', unsafe_allow_html=True)
+            st.dataframe(example_df, use_container_width=True, hide_index=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="font-size: 0.9rem; color: #666666; line-height: 1.6; margin-top: 1rem;">
+            <strong>加重平均：</strong>(<strong>20%</strong> × 10 + <strong>20%</strong> × 15 + <strong>10%</strong> × 20) ÷ (10 + 15 + 20) = 700 ÷ 45 ≒ 15.6%<br>
+            <strong>単純平均：</strong>(<strong>20%</strong> + <strong>20%</strong> + <strong>10%</strong>) ÷ 3 = 16.7%<br>
             <br>
             ※ 実績値の大きい月を重みづけして平均することで、より実態に即した精度評価が可能です。
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
     
     # データ確認
     if st.session_state.data is None:

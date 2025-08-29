@@ -1071,13 +1071,13 @@ def show_ratio_settings():
             else:
                 end_ratio = st.number_input(
                     f"終了%",
-                    min_value=(start_ratio * 100) + 1.0,
+                    min_value=(start_ratio * 100) + 0.1,
                     max_value=100.0,
                     value=category['end_ratio'] * 100,
                     step=1.0,
                     format="%.1f",
                     key=f"end_{i}",
-                    help="整数（例：25）または小数（例：25.5）を入力できます"
+                    help="整数（例：25）または小数（例：25.5）を入力できます。前の区分の終了値より大きい値を入力してください。"
                 ) / 100.0
         
         with col4:

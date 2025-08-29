@@ -1046,12 +1046,21 @@ def show_ratio_settings():
             st.markdown(f"**{category['name']}区分**")
         
         with col2:
-            start_ratio = 0.0 if i == 0 else edited_categories[i-1]['end_ratio']
+            # リアルタイムの入力値を取得
+            if i == 0:
+                start_ratio = 0.0
+            else:
+                # 前の区分のリアルタイム入力値を取得
+                prev_key = f"end_{i-1}"
+                if prev_key in st.session_state:
+                    start_ratio = st.session_state[prev_key] / 100.0
+                else:
+                    start_ratio = edited_categories[i-1]['end_ratio'] if i-1 < len(edited_categories) else 0.0
             st.number_input(
                 f"開始%", 
                 value=start_ratio * 100, 
                 disabled=True, 
-                step=0.1,
+                step=0.01,
                 format="%.1f",
                 key=f"start_{i}"
             )
@@ -1064,20 +1073,20 @@ def show_ratio_settings():
                     f"終了%", 
                     value=100.0, 
                     disabled=True, 
-                    step=0.1,
+                    step=0.01,
                     format="%.1f",
                     key=f"end_{i}"
                 )
             else:
                 end_ratio = st.number_input(
                     f"終了%",
-                    min_value=(start_ratio * 100) + 0.1,
+                    min_value=max(0.0, (start_ratio * 100) + 0.1),
                     max_value=100.0,
                     value=category['end_ratio'] * 100,
-                    step=0.1,
+                    step=0.01,
                     format="%.1f",
                     key=f"end_{i}",
-                    help="整数（例：25、80）または小数（例：25.5、80.3）を入力できます。前の区分の終了値より大きい値を入力してください。"
+                    help=f"整数（例：25、80、90）または小数（例：25.5、80.3）を入力できます。最小値: {max(0.0, (start_ratio * 100) + 0.1):.1f}%"
                 ) / 100.0
         
         with col4:

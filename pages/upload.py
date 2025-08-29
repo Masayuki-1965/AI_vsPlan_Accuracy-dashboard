@@ -1058,10 +1058,10 @@ def show_ratio_settings():
                     start_ratio = edited_categories[i-1]['end_ratio'] if i-1 < len(edited_categories) else 0.0
             st.number_input(
                 f"開始%", 
-                value=start_ratio * 100, 
+                value=float(int(start_ratio * 100)), 
                 disabled=True, 
-                step=0.01,
-                format="%.1f",
+                step=1.0,
+                format="%.0f",
                 key=f"start_{i}"
             )
         
@@ -1073,21 +1073,23 @@ def show_ratio_settings():
                     f"終了%", 
                     value=100.0, 
                     disabled=True, 
-                    step=0.01,
-                    format="%.1f",
+                    step=1.0,
+                    format="%.0f",
                     key=f"end_{i}"
                 )
             else:
-                end_ratio = st.number_input(
+                # StreamlitCloud対応：step=1.0, format="%.0f"に変更して整数入力を優先
+                end_ratio_input = st.number_input(
                     f"終了%",
-                    min_value=max(0.0, (start_ratio * 100) + 0.1),
+                    min_value=max(0.0, (start_ratio * 100) + 1.0),
                     max_value=100.0,
-                    value=category['end_ratio'] * 100,
-                    step=0.01,
-                    format="%.1f",
+                    value=float(int(category['end_ratio'] * 100)),  # 整数値に丸める
+                    step=1.0,
+                    format="%.0f",
                     key=f"end_{i}",
-                    help=f"整数（例：25、80、90）または小数（例：25.5、80.3）を入力できます。最小値: {max(0.0, (start_ratio * 100) + 0.1):.1f}%"
-                ) / 100.0
+                    help=f"整数値を入力してください（例：25、80、90）。最小値: {max(0.0, (start_ratio * 100) + 1.0):.0f}%。小数点が必要な場合は、一度整数で保存後、データを直接編集してください。"
+                )
+                end_ratio = end_ratio_input / 100.0
         
         with col4:
             if len(st.session_state.abc_categories) > 1 and st.button("🗑️", key=f"delete_{i}"):

@@ -454,8 +454,8 @@ def create_filter_ui(df):
             min_value=0.0,
             max_value=1.0,
             value=st.session_state.monthly_trend_filter['diff_threshold'],
-            step=0.01,
-            format="%.2f",
+            step=0.1,
+            format="%.1f",
             key="diff_threshold_ui",
             help="例：0.1 = 10ポイント差（30%と20%の差）"
         )
@@ -468,8 +468,8 @@ def create_filter_ui(df):
             min_value=0.0,
             max_value=1.0,
             value=st.session_state.monthly_trend_filter['diff_input'],
-            step=0.01,
-            format="%.2f",
+            step=0.1,
+            format="%.1f",
             key="diff_input_ui",
             help="例：0.1 = 10ポイント差（30%と20%の差）"
         )

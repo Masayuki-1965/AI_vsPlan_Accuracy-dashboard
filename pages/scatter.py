@@ -184,18 +184,19 @@ def show():
         st.session_state[f"optimal_y_max_{filter_key}"] = default_y_max
         
         y_max_input = st.number_input(
-            "縦軸最大値",
+            "軸最大値（両散布図共通）",
             value=current_y_max,
             step=100,
             format="%d",
-            key=f"y_max_scatter_{filter_key}"
+            key=f"y_max_scatter_{filter_key}",
+            help="誤差率散布図の縦軸、予測値vs実績値散布図の縦軸・横軸の最大値を設定します"
         )
 
     # 散布図作成・表示
     if plot_type == '誤差率散布図（横軸：誤差率 ／ 縦軸：計画値）':
         create_error_rate_scatter(filtered_df, selected_predictions, x_min_input/100, x_max_input/100, y_max_input)
     else:
-        create_prediction_vs_actual_scatter(filtered_df, selected_predictions)
+        create_prediction_vs_actual_scatter(filtered_df, selected_predictions, y_max_input)
 
 def apply_filters(df):
     """③ フィルター設定UIとフィルター適用（分類・期間の順）"""
@@ -300,7 +301,7 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
     
     # ③ 説明文追加
     st.markdown(
-        '<div class="step-annotation">各区分の誤差率を商品コード単位で可視化し、「絶対誤差率」「負の誤差率（欠品リスク）」「正の誤差率（過剰在庫リスク）」を表示します。</div>',
+        '<div class="step-annotation">各区分ごとの商品コード別誤差率を可視化。破線の 0％ を基準軸とし、左側は「負の誤差率（欠品リスク）」、右側は「正の誤差率（過剰在庫リスク）」を示します。</div>',
         unsafe_allow_html=True
     )
     
@@ -431,15 +432,15 @@ def create_error_rate_scatter(df, selected_predictions, x_min, x_max, y_max):
         st.error(f"❌ 散布図の作成でエラーが発生しました: {str(e)}")
         st.info("💡 以下の方法をお試しください：\n- ブラウザの更新（Ctrl+F5）\n- 異なるブラウザでのアクセス\n- データの確認")
 
-def create_prediction_vs_actual_scatter(df, selected_predictions):
-    """予測vs実績散布図を作成（⑥凡例修正）"""
+def create_prediction_vs_actual_scatter(df, selected_predictions, axis_max):
+    """予測vs実績散布図を作成（⑥凡例修正・軸尺度可変化対応）"""
     
     # ② グラフタイトルを中項目見出しスタイルで表示
     st.markdown('<div class="step-title">予測値 vs 実績値散布図</div>', unsafe_allow_html=True)
     
     # ④ 説明文追加
     st.markdown(
-        '<div class="step-annotation">各区分の予測精度を商品コード単位で可視化し、実績値に対する計画値の妥当性を確認します（破線は完全一致ラインを示します）。</div>',
+        '<div class="step-annotation">各区分ごとの予測精度を商品コード単位で可視化し、実績値に対する予測値（または計画値）の妥当性を確認します。破線は完全一致ラインを示します。</div>',
         unsafe_allow_html=True
     )
     
@@ -519,18 +520,11 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
                         trace.showlegend = False
                     fig.add_trace(trace, row=1, col=i+1)
                 
-                # 完全一致ライン（y=x）を追加
-                max_val = max(plot_data['Actual'].max(), plot_data[pred_col].max())
-                min_val = min(plot_data['Actual'].min(), plot_data[pred_col].min())
-                
-                # min_val, max_valが有効な値かチェック
-                if pd.isna(min_val) or pd.isna(max_val) or min_val == max_val:
-                    continue
-                
+                # 完全一致ライン（y=x）を追加（軸最大値に合わせて調整）
                 fig.add_trace(
                     go.Scatter(
-                        x=[min_val, max_val], 
-                        y=[min_val, max_val],
+                        x=[0, axis_max], 
+                        y=[0, axis_max],
                         mode='lines',
                         line=dict(color='red', dash='dash'),
                         name='完全一致線',
@@ -549,8 +543,15 @@ def create_prediction_vs_actual_scatter(df, selected_predictions):
             showlegend=True
         )
         
-        fig.update_xaxes(title_text="実績値")
-        fig.update_yaxes(title_text="計画値")
+        # 軸の範囲を設定（両軸とも同じ最大値を使用）
+        fig.update_xaxes(
+            title_text="実績値",
+            range=[0, axis_max]
+        )
+        fig.update_yaxes(
+            title_text="計画値", 
+            range=[0, axis_max]
+        )
         
         # グラフ表示（エラーハンドリング付き）
         st.plotly_chart(fig, use_container_width=True)

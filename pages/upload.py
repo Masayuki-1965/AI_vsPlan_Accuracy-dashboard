@@ -1051,7 +1051,7 @@ def show_ratio_settings():
                 f"開始%", 
                 value=start_ratio * 100, 
                 disabled=True, 
-                step=1.0,
+                step=0.1,
                 format="%.1f",
                 key=f"start_{i}"
             )
@@ -1064,7 +1064,7 @@ def show_ratio_settings():
                     f"終了%", 
                     value=100.0, 
                     disabled=True, 
-                    step=1.0,
+                    step=0.1,
                     format="%.1f",
                     key=f"end_{i}"
                 )
@@ -1074,10 +1074,10 @@ def show_ratio_settings():
                     min_value=(start_ratio * 100) + 0.1,
                     max_value=100.0,
                     value=category['end_ratio'] * 100,
-                    step=1.0,
+                    step=0.1,
                     format="%.1f",
                     key=f"end_{i}",
-                    help="整数（例：25）または小数（例：25.5）を入力できます。前の区分の終了値より大きい値を入力してください。"
+                    help="整数（例：25、80）または小数（例：25.5、80.3）を入力できます。前の区分の終了値より大きい値を入力してください。"
                 ) / 100.0
         
         with col4:

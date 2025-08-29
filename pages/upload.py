@@ -86,9 +86,9 @@ def show():
         st.session_state.abc_setting_mode = 'ratio'
     if 'abc_quantity_categories' not in st.session_state:
         st.session_state.abc_quantity_categories = [
-            {'name': 'A', 'min_value': 1000},
-            {'name': 'B', 'min_value': 100},
-            {'name': 'C', 'min_value': 0}
+            {'name': 'A', 'min_value': 1000, 'description': 'A区分：高実績商品'},
+            {'name': 'B', 'min_value': 100, 'description': 'B区分：中実績商品'},
+            {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
         ]
     if 'selected_generation_categories' not in st.session_state:
         st.session_state.selected_generation_categories = []
@@ -1047,20 +1047,37 @@ def show_ratio_settings():
         
         with col2:
             start_ratio = 0.0 if i == 0 else edited_categories[i-1]['end_ratio']
-            st.number_input(f"開始%", value=start_ratio * 100, disabled=True, key=f"start_{i}")
+            st.number_input(
+                f"開始%", 
+                value=start_ratio * 100, 
+                disabled=True, 
+                step=1.0,
+                format="%.1f",
+                key=f"start_{i}"
+            )
         
         with col3:
             is_last = (i == len(st.session_state.abc_categories) - 1)
             if is_last:
                 end_ratio = 1.0
-                st.number_input(f"終了%", value=100.0, disabled=True, key=f"end_{i}")
+                st.number_input(
+                    f"終了%", 
+                    value=100.0, 
+                    disabled=True, 
+                    step=1.0,
+                    format="%.1f",
+                    key=f"end_{i}"
+                )
             else:
                 end_ratio = st.number_input(
                     f"終了%",
                     min_value=(start_ratio * 100) + 1.0,
                     max_value=100.0,
                     value=category['end_ratio'] * 100,
-                    key=f"end_{i}"
+                    step=1.0,
+                    format="%.1f",
+                    key=f"end_{i}",
+                    help="整数（例：25）または小数（例：25.5）を入力できます"
                 ) / 100.0
         
         with col4:
@@ -1106,13 +1123,23 @@ def show_quantity_settings():
             is_last = (i == len(st.session_state.abc_quantity_categories) - 1)
             if is_last:
                 min_value = 0
-                st.number_input("下限値", value=0, disabled=True, key=f"qty_min_{i}")
+                st.number_input(
+                    "下限値", 
+                    value=0, 
+                    disabled=True, 
+                    step=1,
+                    format="%d",
+                    key=f"qty_min_{i}"
+                )
             else:
                 min_value = st.number_input(
                     "下限値",
                     min_value=0,
                     value=category.get('min_value', 0),
-                    key=f"qty_min_{i}"
+                    step=1,
+                    format="%d",
+                    key=f"qty_min_{i}",
+                    help="整数値を入力してください（例：100）"
                 )
         
         with col4:
@@ -1134,10 +1161,16 @@ def add_abc_category(category_name, mode):
         existing_names = [cat['name'] for cat in st.session_state.abc_categories]
         if category_name not in existing_names:
             last_end = max([cat['end_ratio'] for cat in st.session_state.abc_categories]) if st.session_state.abc_categories else 0.0
+            # より実用的なデフォルト値を設定（10%刻み）
+            default_increment = 0.1  # 10%
+            new_end_ratio = min(1.0, last_end + default_increment)
+            # 整数パーセンテージになるよう調整
+            new_end_ratio = round(new_end_ratio, 1)
+            
             new_category = {
                 'name': category_name,
                 'start_ratio': last_end,
-                'end_ratio': min(1.0, last_end + 0.1),
+                'end_ratio': new_end_ratio,
                 'description': f'{category_name}区分'
             }
             st.session_state.abc_categories.append(new_category)
@@ -1145,9 +1178,12 @@ def add_abc_category(category_name, mode):
     else:
         existing_names = [cat['name'] for cat in st.session_state.abc_quantity_categories]
         if category_name not in existing_names:
+            # より実用的なデフォルト値を設定
+            default_min_value = 100  # 100単位のデフォルト値
+            
             new_category = {
                 'name': category_name,
-                'min_value': 1,
+                'min_value': default_min_value,
                 'description': f'{category_name}区分'
             }
             st.session_state.abc_quantity_categories.append(new_category)

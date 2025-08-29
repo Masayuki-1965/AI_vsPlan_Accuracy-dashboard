@@ -27,11 +27,11 @@ NUMERIC_COLUMNS = ['Actual', 'AI_pred', 'Plan_01', 'Plan_02']
 
 # ABC区分設定
 ABC_CLASSIFICATION_SETTINGS = {
-    # デフォルトの区分定義
+    # デフォルトの区分定義（整数パーセンテージ対応）
     'default_categories': [
         {'name': 'A', 'start_ratio': 0.0, 'end_ratio': 0.5, 'description': 'A区分：高頻度・重要商品'},
-        {'name': 'B', 'start_ratio': 0.5, 'end_ratio': 0.9, 'description': 'B区分：中頻度・標準商品'},
-        {'name': 'C', 'start_ratio': 0.9, 'end_ratio': 1.0, 'description': 'C区分：低頻度・その他商品'}
+        {'name': 'B', 'start_ratio': 0.5, 'end_ratio': 0.8, 'description': 'B区分：中頻度・標準商品'},
+        {'name': 'C', 'start_ratio': 0.8, 'end_ratio': 1.0, 'description': 'C区分：低頻度・その他商品'}
     ],
     # 追加可能な区分
     'additional_categories': [

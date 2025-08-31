@@ -490,19 +490,38 @@ def show_step4():
     st.markdown('<div class="step-title">ABC区分自動生成</div>', unsafe_allow_html=True)
     st.markdown('<div class="step-annotation">ABC区分を自動生成するか、既存を使用するかを選択してください。※ 一部分類のみを対象とした自動生成も可能です。</div>', unsafe_allow_html=True)
     
-    # ABC区分生成の選択肢（排他制御に変更）
+    # セッションステートでチェックボックスの状態を管理
+    if 'execute_abc_generation' not in st.session_state:
+        st.session_state.execute_abc_generation = False
+    if 'use_existing_abc' not in st.session_state:
+        st.session_state.use_existing_abc = False
+    
+    # ABC区分生成の選択肢（双方向排他制御）
     col1, col2 = st.columns(2)
     
     with col1:
-        execute_abc_generation = st.checkbox("チェックするとABC区分を自動生成します（分類単位）")
+        execute_abc_generation = st.checkbox(
+            "チェックするとABC区分を自動生成します（分類単位）", 
+            value=st.session_state.execute_abc_generation,
+            disabled=st.session_state.use_existing_abc,
+            key="abc_generation_checkbox"
+        )
+        st.session_state.execute_abc_generation = execute_abc_generation
     
     with col2:
-        use_existing_abc = st.checkbox("チェックすると既存のABC区分を使用します（全分類）", disabled=execute_abc_generation)
+        use_existing_abc = st.checkbox(
+            "チェックすると既存のABC区分を使用します（全分類）", 
+            value=st.session_state.use_existing_abc,
+            disabled=st.session_state.execute_abc_generation,
+            key="use_existing_abc_checkbox"
+        )
+        st.session_state.use_existing_abc = use_existing_abc
     
-    # 排他制御: 一方が選択されたら他方を無効化
+    # 排他制御: 一方が選択されたら他方をリセット
     if execute_abc_generation and use_existing_abc:
+        # 両方がTrueになった場合は、後から変更された方を優先
+        # この場合は直前の状態と比較して判断
         st.session_state.use_existing_abc = False
-        use_existing_abc = False
         st.rerun()
     
     # チェックボックスがOFFになった場合の処理

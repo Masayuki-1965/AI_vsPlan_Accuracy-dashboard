@@ -294,7 +294,7 @@ def show_step2():
     st.session_state.current_mapping = mapping
     
     # マッピング実行ボタン
-    if st.button("マッピング設定を適用する", type="primary", use_container_width=True):
+    if st.button("マッピングを適用する", type="primary", use_container_width=True):
         # 必須項目のチェック
         required_fields = ['P_code', 'Date', 'Actual', 'AI_pred', 'Plan_01']
         missing_fields = [field for field in required_fields if not mapping.get(field)]
@@ -357,11 +357,11 @@ def show_step2():
 def show_step3():
     """STEP 3: 月別合計値補正"""
     st.markdown('<div class="step-title">月別合計値補正</div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-annotation">分類ごとの月別合計値を計画値01に合わせて調整します。AI予測値および計画値02（存在する場合）が対象です。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">取り込んだデータの月別合計を、分類ごとに計画値01と一致するように調整します。調整対象は AI予測値と計画値02（存在する場合）です。</div>', unsafe_allow_html=True)
     
     # 月別合計値補正の選択
     st.session_state.monthly_correction_enabled = st.checkbox(
-        "月別合計値補正を実行する（全分類対象）",
+        "チェックすると月別合計値を補正します（全分類対象）",
         value=st.session_state.monthly_correction_enabled
     )
     
@@ -494,10 +494,10 @@ def show_step4():
     col1, col2 = st.columns(2)
     
     with col1:
-        execute_abc_generation = st.checkbox("ABC区分を自動生成する（分類単位）")
+        execute_abc_generation = st.checkbox("チェックするとABC区分を自動生成します（分類単位）")
     
     with col2:
-        use_existing_abc = st.checkbox("既存のABC区分を使用する（全分類）", disabled=execute_abc_generation)
+        use_existing_abc = st.checkbox("チェックすると既存のABC区分を使用します（全分類）", disabled=execute_abc_generation)
     
     # 排他制御: 一方が選択されたら他方を無効化
     if execute_abc_generation and use_existing_abc:

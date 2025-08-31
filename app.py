@@ -45,7 +45,7 @@ st.markdown(f"""
         font-weight: 500;
         color: white;
         text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
-    ">AI予測と現行計画値を多角的に比較・評価。計画精度を可視化し、改善余地を明らかにする実務特化型ダッシュボード</p>
+    ">AI予測値と現行計画値を多角的に比較・評価し、計画精度を可視化。改善余地を明らかにする実務特化型ダッシュボード。</p>
 </div>
 """, unsafe_allow_html=True)
 

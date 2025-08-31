@@ -193,7 +193,7 @@ def show_step1():
 def show_step2():
     """STEP 2: データマッピング"""
     st.markdown('<div class="step-title">データマッピング</div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-annotation">CSVのカラム名をシステム項目にマッピングしてください（基本的に1回のみ実行）。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">読み込んだCSVデータの列名を、システム項目にマッピングしてください（＝対応する項目に紐づけます）。この設定は通常1回のみで完了します。</div>', unsafe_allow_html=True)
     
     # マッピング設定UI
     mapping = {}
@@ -261,11 +261,11 @@ def show_step2():
     
     # 任意項目についての説明
     st.markdown("---")
-    st.markdown('<div class="step-annotation">※ 任意項目について：詳細分析を行う場合は「分類」の設定を、既にABC区分を設定済みの場合は「ABC区分」をマッピングしてください。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="step-annotation">※ 任意項目について：詳細分析を行う場合は「分類」を設定してください。既にABC区分を設定している場合は「ABC区分」をマッピングしてください。</div>', unsafe_allow_html=True)
     
     # 項目名変更機能の追加
-    with st.expander("項目名カスタマイズ（任意）"):
-        st.markdown('<div class="step-annotation">「計画値01」「計画値02」「AI予測値」の項目名は変更可能です。その他の項目は、システム項目として固定です。</div>', unsafe_allow_html=True)
+    with st.expander("項目名の編集（任意）"):
+        st.markdown('<div class="step-annotation">「計画値01」「計画値02」「AI予測値」は名称を変更できます。その他の項目は変更できません。</div>', unsafe_allow_html=True)
         
         col_custom1, col_custom2, col_custom3 = st.columns(3)
         

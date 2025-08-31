@@ -145,12 +145,12 @@ def show():
     st.markdown("""
     <div class="section-header-box">
         <h2>■ 月次推移折れ線グラフ一覧</h2>
-        <p>このセクションでは、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の<strong>月平均絶対誤差率</strong>（詳細は注釈参照）のポイント差を条件として指定し、それに該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
+        <p>このセクションでは、AI予測値・計画値・実績値の月次推移を重ねた折れ線グラフを表示します。「AI予測値」と「計画値」の<strong>月平均絶対誤差率</strong>（詳細は注釈参照）のポイント差を条件として指定し、該当する商品コードを抽出・表示することで、AI予測の精度や改善の余地を可視化します。</p>
     </div>
     """, unsafe_allow_html=True)
     
     # 月平均_絶対誤差率の注釈（展開式）
-    with st.expander("月平均_絶対誤差率とは", expanded=False):
+    with st.expander("月平均絶対誤差率とは", expanded=False):
         st.markdown("""
         <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
             各月の絶対誤差率を月別実績値で重みづけして算出した加重平均値です。<br>

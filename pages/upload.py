@@ -534,10 +534,17 @@ def show_step4():
         abc_method_col1, abc_method_col2 = st.columns(2)
         
         with abc_method_col1:
-            if st.radio("区分設定方式", ["構成比率範囲", "数量範囲"], horizontal=True) == "構成比率範囲":
+            selected_method = st.radio("区分設定方式", ["構成比率で区分", "数量範囲で区分"], horizontal=True)
+            if selected_method == "構成比率で区分":
                 st.session_state.abc_setting_mode = 'ratio'
             else:
                 st.session_state.abc_setting_mode = 'quantity'
+        
+        # 選択した方式に応じて説明文を全幅で表示
+        if st.session_state.abc_setting_mode == 'ratio':
+            st.info("実績値の多い順にソートし、指定した累積構成比率に基づいて分類単位ごとにABC分析を行います。 \n**※実績値＝全期間の実績値合計**")
+        else:
+            st.info("月平均実績値の多い順にソートし、指定した数量範囲に基づいて分類単位ごとにABC分析を行います。 \n**※月平均実績値＝全期間の実績値合計 ÷ 対象月数**")
         
         # 対象分類の選択
         if 'category_code' in st.session_state.data.columns:
@@ -1048,8 +1055,6 @@ def show_abc_settings():
 
 def show_ratio_settings():
     """構成比率範囲設定画面"""
-    st.markdown("**構成比率範囲設定**")
-    st.info(ABC_EXPLANATION['category_description_ratio'])
     
     # 区分の追加
     col1, col2 = st.columns([3, 1])
@@ -1130,8 +1135,6 @@ def show_ratio_settings():
 
 def show_quantity_settings():
     """数量範囲設定画面"""
-    st.markdown("**数量範囲設定**")
-    st.info(ABC_EXPLANATION['category_description_quantity'])
     
     # 区分の追加
     col1, col2 = st.columns([3, 1])

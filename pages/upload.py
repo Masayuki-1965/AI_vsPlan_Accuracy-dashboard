@@ -505,6 +505,10 @@ def show_step4():
         use_existing_abc = False
         st.rerun()
     
+    # チェックボックスがOFFになった場合の処理
+    if not execute_abc_generation and not use_existing_abc:
+        st.session_state.abc_generation_completed = False
+    
     if execute_abc_generation:
         # 区分設定方式の選択
         st.markdown('<div class="section-subtitle">設定方法</div>', unsafe_allow_html=True)
@@ -552,8 +556,8 @@ def show_step4():
     
     elif use_existing_abc:
         st.info("💡 既存のABC区分をそのまま使用して集計結果を表示します。")
-        if st.button("既存区分で集計のみ行う", type="secondary", use_container_width=True):
-            st.session_state.abc_generation_completed = True
+        # チェックボックスがONになった時点で即座に集計結果を表示
+        st.session_state.abc_generation_completed = True
     
     # 結果表示
     if st.session_state.abc_generation_completed:

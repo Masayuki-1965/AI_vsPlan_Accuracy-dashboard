@@ -534,10 +534,21 @@ def show_step4():
         abc_method_col1, abc_method_col2 = st.columns(2)
         
         with abc_method_col1:
-            if st.radio("区分設定方式", ["構成比率範囲", "数量範囲"], horizontal=True) == "構成比率範囲":
+            selected_method = st.radio("区分設定方式", ["構成比率で区分", "数量範囲で区分"], horizontal=True)
+            previous_mode = st.session_state.get('abc_setting_mode', 'ratio')
+            if selected_method == "構成比率で区分":
                 st.session_state.abc_setting_mode = 'ratio'
             else:
                 st.session_state.abc_setting_mode = 'quantity'
+                # 数量範囲に切り替えた場合、デフォルト値を再計算
+                if previous_mode != 'quantity':
+                    st.session_state.abc_quantity_auto_calculated = False
+        
+        # 選択した方式の説明を表示
+        if st.session_state.abc_setting_mode == 'ratio':
+            st.info("実績値の多い順にソートし、指定した累積構成比率に基づいて分類単位ごとにABC分析を行います。 \n**※実績値＝全期間の実績値合計**")
+        else:
+            st.info("月平均実績値の多い順にソートし、指定した数量範囲に基づいて分類単位ごとにABC分析を行います。 \n**※月平均実績値＝全期間の実績値合計 ÷ 対象月数**")
         
         # 対象分類の選択
         if 'category_code' in st.session_state.data.columns:
@@ -561,9 +572,15 @@ def show_step4():
                 if len(selected_categories) > 1:
                     selected_categories = ['全て']
                     st.rerun()
+                # 選択が変更された場合、数量範囲のデフォルト値を再計算
+                if st.session_state.get('selected_generation_categories') != []:
+                    st.session_state.abc_quantity_auto_calculated = False
                 st.session_state.selected_generation_categories = []  # 全分類対象の場合は空リストで処理
                 st.info("💡 「全て」を選択：すべての分類に対して、同じ基準で分類単位ごとにABC区分を自動生成します。")
             else:
+                # 選択が変更された場合、数量範囲のデフォルト値を再計算
+                if st.session_state.get('selected_generation_categories') != selected_categories:
+                    st.session_state.abc_quantity_auto_calculated = False
                 st.session_state.selected_generation_categories = selected_categories
         
         # ABC区分設定の詳細設定
@@ -1131,7 +1148,12 @@ def show_ratio_settings():
 def show_quantity_settings():
     """数量範囲設定画面"""
     st.markdown("**数量範囲設定**")
-    st.info(ABC_EXPLANATION['category_description_quantity'])
+    st.info("月平均実績値の多い順にソートし、指定した数量範囲に基づいて分類単位ごとにABC分析を行います。 \n**※月平均実績値＝全期間の実績値合計 ÷ 対象月数**")
+    
+    # デフォルト値を累積構成比率に基づいて自動計算
+    if 'abc_quantity_auto_calculated' not in st.session_state:
+        st.session_state.abc_quantity_categories = calculate_quantity_defaults_from_ratio()
+        st.session_state.abc_quantity_auto_calculated = True
     
     # 区分の追加
     col1, col2 = st.columns([3, 1])
@@ -1188,6 +1210,80 @@ def show_quantity_settings():
         })
     
     st.session_state.abc_quantity_categories = edited_categories
+
+def calculate_quantity_defaults_from_ratio():
+    """累積構成比率に基づいて数量範囲のデフォルト値を自動計算"""
+    try:
+        # 対象データの取得
+        df = st.session_state.data.copy()
+        
+        # 対象分類の決定
+        target_categories = st.session_state.selected_generation_categories if st.session_state.selected_generation_categories else None
+        
+        if target_categories:
+            # 特定分類が選択されている場合
+            df_filtered = df[df['category_code'].isin(target_categories)]
+        else:
+            # 「全て」が選択されている場合
+            df_filtered = df
+        
+        if df_filtered.empty:
+            # データがない場合はデフォルト値を返す
+            return [
+                {'name': 'A', 'min_value': 1000, 'description': 'A区分：高実績商品'},
+                {'name': 'B', 'min_value': 100, 'description': 'B区分：中実績商品'},
+                {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
+            ]
+        
+        # 月平均実績値の計算
+        # 期間数の計算（Dateカラムがある場合）
+        if 'Date' in df_filtered.columns:
+            unique_dates = df_filtered['Date'].nunique()
+            period_count = max(1, unique_dates)
+        else:
+            period_count = 1
+        
+        # 商品コード別の月平均実績値を計算
+        product_summary = df_filtered.groupby('Product_code')['Actual'].sum().reset_index()
+        product_summary['monthly_avg'] = product_summary['Actual'] / period_count
+        product_summary = product_summary.sort_values('monthly_avg', ascending=False)
+        
+        # 累積構成比率の計算
+        total_actual = product_summary['monthly_avg'].sum()
+        product_summary['cumulative_ratio'] = product_summary['monthly_avg'].cumsum() / total_actual
+        
+        # A区分（50%）とB区分（80%）の境界値を計算
+        a_boundary_idx = product_summary[product_summary['cumulative_ratio'] <= 0.5].index
+        b_boundary_idx = product_summary[product_summary['cumulative_ratio'] <= 0.8].index
+        
+        if len(a_boundary_idx) > 0:
+            a_min_value = int(product_summary.loc[a_boundary_idx[-1], 'monthly_avg'])
+        else:
+            a_min_value = int(product_summary['monthly_avg'].max() * 0.5)
+        
+        if len(b_boundary_idx) > 0:
+            b_min_value = int(product_summary.loc[b_boundary_idx[-1], 'monthly_avg'])
+        else:
+            b_min_value = int(product_summary['monthly_avg'].max() * 0.2)
+        
+        # 最小値を確保
+        a_min_value = max(a_min_value, 100)
+        b_min_value = max(b_min_value, 10)
+        
+        return [
+            {'name': 'A', 'min_value': a_min_value, 'description': 'A区分：高実績商品'},
+            {'name': 'B', 'min_value': b_min_value, 'description': 'B区分：中実績商品'},
+            {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
+        ]
+        
+    except Exception as e:
+        # エラーが発生した場合はデフォルト値を返す
+        st.warning(f"デフォルト値の自動計算でエラーが発生しました: {str(e)}")
+        return [
+            {'name': 'A', 'min_value': 1000, 'description': 'A区分：高実績商品'},
+            {'name': 'B', 'min_value': 100, 'description': 'B区分：中実績商品'},
+            {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
+        ]
 
 def add_abc_category(category_name, mode):
     """ABC区分の追加"""

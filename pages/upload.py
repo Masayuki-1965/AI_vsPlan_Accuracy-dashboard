@@ -86,14 +86,16 @@ def show():
         st.session_state.abc_setting_mode = 'ratio'
     if 'abc_quantity_categories' not in st.session_state:
         st.session_state.abc_quantity_categories = [
-            {'name': 'A', 'min_value': 1000, 'description': 'A区分：高実績商品'},
-            {'name': 'B', 'min_value': 100, 'description': 'B区分：中実績商品'},
+            {'name': 'A', 'min_value': 50, 'description': 'A区分：高実績商品'},
+            {'name': 'B', 'min_value': 10, 'description': 'B区分：中実績商品'},
             {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
         ]
     if 'selected_generation_categories' not in st.session_state:
         st.session_state.selected_generation_categories = []
     if 'abc_generation_completed' not in st.session_state:
         st.session_state.abc_generation_completed = False
+    if 'abc_quantity_auto_calculated' not in st.session_state:
+        st.session_state.abc_quantity_auto_calculated = False
     if 'custom_column_names' not in st.session_state:
         st.session_state.custom_column_names = {
             'Plan_01': '計画01',
@@ -1147,9 +1149,15 @@ def show_quantity_settings():
     """数量範囲設定画面"""
     
     # デフォルト値を累積構成比率に基づいて自動計算
-    if 'abc_quantity_auto_calculated' not in st.session_state:
+    if not st.session_state.get('abc_quantity_auto_calculated', False):
         st.session_state.abc_quantity_categories = calculate_quantity_defaults_from_ratio()
         st.session_state.abc_quantity_auto_calculated = True
+        
+    # 動的デフォルト値の情報を表示
+    if st.session_state.get('abc_quantity_auto_calculated', False):
+        st.info("💡 **動的デフォルト値が適用されています**  \n"
+               "A区分・B区分の下限値は、選択された対象分類の月平均実績値に基づき、"
+               "累積構成比率50%・80%に相当する値で自動計算されています。必要に応じて手動で調整可能です。")
     
     # 区分の追加
     col1, col2 = st.columns([3, 1])
@@ -1211,6 +1219,9 @@ def calculate_quantity_defaults_from_ratio():
     """累積構成比率に基づいて数量範囲のデフォルト値を自動計算"""
     try:
         # 対象データの取得
+        if 'data' not in st.session_state or st.session_state.data is None:
+            return get_fallback_quantity_defaults()
+            
         df = st.session_state.data.copy()
         
         # 対象分類の決定
@@ -1218,18 +1229,16 @@ def calculate_quantity_defaults_from_ratio():
         
         if target_categories:
             # 特定分類が選択されている場合
-            df_filtered = df[df['category_code'].isin(target_categories)]
+            if 'category_code' in df.columns:
+                df_filtered = df[df['category_code'].isin(target_categories)]
+            else:
+                df_filtered = df
         else:
-            # 「全て」が選択されている場合
+            # 「全て」が選択されている場合、または任意の分類を基準にする場合
             df_filtered = df
         
-        if df_filtered.empty:
-            # データがない場合はデフォルト値を返す
-            return [
-                {'name': 'A', 'min_value': 1000, 'description': 'A区分：高実績商品'},
-                {'name': 'B', 'min_value': 100, 'description': 'B区分：中実績商品'},
-                {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
-            ]
+        if df_filtered.empty or 'Actual' not in df_filtered.columns:
+            return get_fallback_quantity_defaults()
         
         # 月平均実績値の計算
         # 期間数の計算（Dateカラムがある場合）
@@ -1240,30 +1249,46 @@ def calculate_quantity_defaults_from_ratio():
             period_count = 1
         
         # 商品コード別の月平均実績値を計算
-        product_summary = df_filtered.groupby('Product_code')['Actual'].sum().reset_index()
+        # Product_codeまたはP_codeカラムを使用
+        product_column = 'P_code' if 'P_code' in df_filtered.columns else 'Product_code'
+        if product_column not in df_filtered.columns:
+            return get_fallback_quantity_defaults()
+            
+        product_summary = df_filtered.groupby(product_column)['Actual'].sum().reset_index()
         product_summary['monthly_avg'] = product_summary['Actual'] / period_count
         product_summary = product_summary.sort_values('monthly_avg', ascending=False)
+        
+        if product_summary.empty or product_summary['monthly_avg'].sum() == 0:
+            return get_fallback_quantity_defaults()
         
         # 累積構成比率の計算
         total_actual = product_summary['monthly_avg'].sum()
         product_summary['cumulative_ratio'] = product_summary['monthly_avg'].cumsum() / total_actual
         
         # A区分（50%）とB区分（80%）の境界値を計算
-        a_boundary_idx = product_summary[product_summary['cumulative_ratio'] <= 0.5].index
-        b_boundary_idx = product_summary[product_summary['cumulative_ratio'] <= 0.8].index
+        a_boundary_products = product_summary[product_summary['cumulative_ratio'] <= 0.5]
+        b_boundary_products = product_summary[product_summary['cumulative_ratio'] <= 0.8]
         
-        if len(a_boundary_idx) > 0:
-            a_min_value = int(product_summary.loc[a_boundary_idx[-1], 'monthly_avg'])
+        if len(a_boundary_products) > 0:
+            # 累積構成比率50%に相当する月平均実績値
+            a_min_value = max(1, int(a_boundary_products.iloc[-1]['monthly_avg']))
         else:
-            a_min_value = int(product_summary['monthly_avg'].max() * 0.5)
+            # データが少ない場合は最大値の50%を使用
+            a_min_value = max(1, int(product_summary['monthly_avg'].max() * 0.5))
         
-        if len(b_boundary_idx) > 0:
-            b_min_value = int(product_summary.loc[b_boundary_idx[-1], 'monthly_avg'])
+        if len(b_boundary_products) > 0:
+            # 累積構成比率80%に相当する月平均実績値
+            b_min_value = max(1, int(b_boundary_products.iloc[-1]['monthly_avg']))
         else:
-            b_min_value = int(product_summary['monthly_avg'].max() * 0.2)
+            # データが少ない場合は最大値の20%を使用
+            b_min_value = max(1, int(product_summary['monthly_avg'].max() * 0.2))
         
-        # 最小値を確保
-        a_min_value = max(a_min_value, 100)
+        # A区分が存在しないケースを防止するための調整
+        if a_min_value <= b_min_value:
+            a_min_value = b_min_value + 1
+        
+        # 最小値を確保（要望に基づく暫定値）
+        a_min_value = max(a_min_value, 50)
         b_min_value = max(b_min_value, 10)
         
         return [
@@ -1275,11 +1300,15 @@ def calculate_quantity_defaults_from_ratio():
     except Exception as e:
         # エラーが発生した場合はデフォルト値を返す
         st.warning(f"デフォルト値の自動計算でエラーが発生しました: {str(e)}")
-        return [
-            {'name': 'A', 'min_value': 1000, 'description': 'A区分：高実績商品'},
-            {'name': 'B', 'min_value': 100, 'description': 'B区分：中実績商品'},
-            {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
-        ]
+        return get_fallback_quantity_defaults()
+
+def get_fallback_quantity_defaults():
+    """フォールバック用のデフォルト値（要望に基づく暫定値）"""
+    return [
+        {'name': 'A', 'min_value': 50, 'description': 'A区分：高実績商品'},
+        {'name': 'B', 'min_value': 10, 'description': 'B区分：中実績商品'},
+        {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
+    ]
 
 def add_abc_category(category_name, mode):
     """ABC区分の追加"""

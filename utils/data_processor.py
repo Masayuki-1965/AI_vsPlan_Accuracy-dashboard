@@ -572,8 +572,8 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
     """
     if df is None or df.empty:
         return [
-            {'name': 'A', 'min_value': 1000},
-            {'name': 'B', 'min_value': 100},
+            {'name': 'A', 'min_value': 50},
+            {'name': 'B', 'min_value': 10},
             {'name': 'C', 'min_value': 0}
         ]
     
@@ -583,8 +583,8 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
         
         if not monthly_averages:
             return [
-                {'name': 'A', 'min_value': 1000},
-                {'name': 'B', 'min_value': 100},
+                {'name': 'A', 'min_value': 50},
+                {'name': 'B', 'min_value': 10},
                 {'name': 'C', 'min_value': 0}
             ]
         
@@ -592,8 +592,8 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
         sorted_averages = sorted(monthly_averages.values(), reverse=True)
         
         if len(sorted_averages) == 0:
-            a_threshold = 1000
-            b_threshold = 100
+            a_threshold = 50
+            b_threshold = 10
         else:
             # A区分（上位50%相当）の下限値
             a_index = int(len(sorted_averages) * 0.5)
@@ -616,7 +616,7 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
     except Exception:
         # エラーが発生した場合はデフォルト値を返す
         return [
-            {'name': 'A', 'min_value': 1000},
-            {'name': 'B', 'min_value': 100},
+            {'name': 'A', 'min_value': 50},
+            {'name': 'B', 'min_value': 10},
             {'name': 'C', 'min_value': 0}
         ] 

@@ -44,7 +44,8 @@ FOOTER_HTML = """
 </div>
 """
 
-# ヘルプテキスト定数
+# ヘルプテキスト定数 (config/help_texts.py に移行済み)
+# 後方互換性のため一時的に保持
 HELP_TEXTS = {
     'error_type_help': "絶対: |計画-実績|÷実績, 正: 計画>実績(滞留), 負: 計画<実績(欠品)",
     'file_upload_help': "分析対象のCSVファイルをアップロードしてください",

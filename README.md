@@ -76,7 +76,9 @@ AI_vs_Plan_Accuracy_ver1/
 │   ├── __init__.py
 │   ├── constants.py      # 定数定義
 │   ├── settings.py       # アプリケーション設定
-│   └── ui_styles.py      # UIスタイル定義
+│   ├── ui_styles.py      # UIスタイル定義（レガシー）
+│   ├── help_texts.py     # ヘルプテキスト・ガイド文統合
+│   └── css_styles.py     # CSSスタイル統合管理
 ├── pages/                # ページ別コード
 │   ├── __init__.py
 │   ├── upload.py         # データアップロード
@@ -87,7 +89,8 @@ AI_vs_Plan_Accuracy_ver1/
 │   ├── __init__.py
 │   ├── data_processor.py # データ処理
 │   ├── error_calculator.py # 誤差率計算
-│   └── validators.py     # データ検証
+│   ├── validators.py     # データ検証
+│   └── common_helpers.py # 共通ヘルパー関数
 ├── docs/                 # ドキュメント
 │   ├── development_plan.md
 │   ├── phase1_completion_report.md
@@ -140,9 +143,10 @@ japanize-matplotlib>=1.1.3
 - 基本機能の実装
 - UI/UXの統一
 
-### Phase 2 🚧 進行中
-- 拡張機能の実装
+### Phase 2 ✅ 完了
+- 拡張機能の実装（ABC区分自動生成、動的デフォルト値計算）
 - パフォーマンス最適化
+- コードリファクタリング（モジュール化、可読性向上）
 
 ### Phase 3 📋 計画中
 - API連携機能
@@ -169,5 +173,5 @@ japanize-matplotlib>=1.1.3
 ---
 
 **作成日**: 2025年8月29日  
-**バージョン**: Phase 2 (MVP進捗80%)  
-**最終更新**: 2025年8月29日
+**バージョン**: Phase 2 (MVP進捗80%) - リファクタリング完了版  
+**最終更新**: 2025年1月21日

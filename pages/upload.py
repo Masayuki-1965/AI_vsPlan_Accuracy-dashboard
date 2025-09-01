@@ -15,53 +15,14 @@ from utils.data_processor import (
 from config.settings import ABC_CLASSIFICATION_SETTINGS, COLUMN_MAPPING
 from config.ui_styles import HELP_TEXTS, ABC_EXPLANATION
 from config.constants import DATA_PROCESSING_CONSTANTS, UI_DISPLAY_CONSTANTS
+from config.help_texts import MAPPING_TEXTS, ABC_TEXTS, FILE_UPLOAD_TEXTS
+from config.css_styles import get_page_css
 
 def show():
     """データセット作成ページを表示"""
     
-    # カスタムCSS（UI/UXデザインガイド準拠）
-    st.markdown("""
-    <style>
-    .main-title {
-        font-size: 2.2em;
-        font-weight: bold;
-        color: #1976d2;
-        margin-bottom: 1em;
-        margin-top: 1em;
-    }
-    .main-description {
-        color: #666666;
-        font-size: 1.05em;
-        margin-bottom: 2em;
-        line-height: 1.6;
-    }
-    .step-title {
-        font-size: 1.4em;
-        font-weight: bold;
-        color: #1976d2;
-        border-left: 4px solid #1976d2;
-        padding-left: 12px;
-        margin-bottom: 1em;
-        margin-top: 2em;
-    }
-    .step-annotation {
-        color: #666666;
-        font-size: 0.95em;
-        margin-bottom: 1.2em;
-    }
-    .section-subtitle {
-        font-size: 1.1em;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 0.8em;
-        margin-top: 1.2em;
-    }
-    .result-section {
-        margin-top: 1.5em;
-        margin-bottom: 2em;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    # カスタムCSS（統合スタイル使用）
+    st.markdown(get_page_css('upload'), unsafe_allow_html=True)
     
     # セッション状態の初期化
     if 'original_data' not in st.session_state:

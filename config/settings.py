@@ -111,7 +111,7 @@ DISPLAY_SETTINGS = {
 
 # アプリケーション情報
 APP_INFO = {
-    'title': 'AI需要予測 vs 計画値 精度比較分析ダッシュボード',
+    'title': 'AI需要予測値 vs 計画値 精度比較分析ダッシュボード',
     'version': '1.0.0',
     'phase': 'Phase 1 (MVP-50%)',
     'icon': '📊'

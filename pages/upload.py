@@ -1248,9 +1248,9 @@ def calculate_quantity_defaults_from_ratio():
         if a_min_value <= b_min_value:
             a_min_value = b_min_value + 1
         
-        # 最小値を確保（要望に基づく暫定値）
-        a_min_value = max(a_min_value, 50)
-        b_min_value = max(b_min_value, 10)
+        # 最小値を1以上に確保（動的計算値を優先）
+        a_min_value = max(a_min_value, 1)
+        b_min_value = max(b_min_value, 1)
         
         return [
             {'name': 'A', 'min_value': a_min_value, 'description': 'A区分：高実績商品'},
@@ -1264,10 +1264,10 @@ def calculate_quantity_defaults_from_ratio():
         return get_fallback_quantity_defaults()
 
 def get_fallback_quantity_defaults():
-    """フォールバック用のデフォルト値（要望に基づく暫定値）"""
+    """フォールバック用のデフォルト値（動的計算エラー時の最小値）"""
     return [
-        {'name': 'A', 'min_value': 50, 'description': 'A区分：高実績商品'},
-        {'name': 'B', 'min_value': 10, 'description': 'B区分：中実績商品'},
+        {'name': 'A', 'min_value': 1, 'description': 'A区分：高実績商品'},
+        {'name': 'B', 'min_value': 1, 'description': 'B区分：中実績商品'},
         {'name': 'C', 'min_value': 0, 'description': 'C区分：低実績商品'}
     ]
 

@@ -572,8 +572,8 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
     """
     if df is None or df.empty:
         return [
-            {'name': 'A', 'min_value': 50},
-            {'name': 'B', 'min_value': 10},
+            {'name': 'A', 'min_value': 1},
+            {'name': 'B', 'min_value': 1},
             {'name': 'C', 'min_value': 0}
         ]
     
@@ -583,25 +583,38 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
         
         if not monthly_averages:
             return [
-                {'name': 'A', 'min_value': 50},
-                {'name': 'B', 'min_value': 10},
+                {'name': 'A', 'min_value': 1},
+                {'name': 'B', 'min_value': 1},
                 {'name': 'C', 'min_value': 0}
             ]
         
-        # 月平均実績値を降順でソート
-        sorted_averages = sorted(monthly_averages.values(), reverse=True)
+        # 月平均実績値を降順でソートして累積構成比率を計算
+        import pandas as pd
+        monthly_avg_df = pd.DataFrame(list(monthly_averages.items()), columns=['product', 'monthly_avg'])
+        monthly_avg_df = monthly_avg_df.sort_values('monthly_avg', ascending=False)
         
-        if len(sorted_averages) == 0:
-            a_threshold = 50
-            b_threshold = 10
+        if monthly_avg_df.empty or monthly_avg_df['monthly_avg'].sum() == 0:
+            # データがない場合は最小値を設定
+            a_threshold = 1
+            b_threshold = 1
         else:
-            # A区分（上位50%相当）の下限値
-            a_index = int(len(sorted_averages) * 0.5)
-            a_threshold = max(1, int(sorted_averages[a_index])) if a_index < len(sorted_averages) else 1
+            # 累積構成比率の計算
+            total_actual = monthly_avg_df['monthly_avg'].sum()
+            monthly_avg_df['cumulative_ratio'] = monthly_avg_df['monthly_avg'].cumsum() / total_actual
             
-            # B区分（上位90%相当）の下限値
-            b_index = int(len(sorted_averages) * 0.9)
-            b_threshold = max(1, int(sorted_averages[b_index])) if b_index < len(sorted_averages) else 1
+            # A区分（累積構成比率50%相当）の下限値
+            a_boundary_products = monthly_avg_df[monthly_avg_df['cumulative_ratio'] <= 0.5]
+            if len(a_boundary_products) > 0:
+                a_threshold = max(1, int(a_boundary_products.iloc[-1]['monthly_avg']))
+            else:
+                a_threshold = max(1, int(monthly_avg_df['monthly_avg'].max() * 0.5))
+            
+            # B区分（累積構成比率80%相当）の下限値
+            b_boundary_products = monthly_avg_df[monthly_avg_df['cumulative_ratio'] <= 0.8]
+            if len(b_boundary_products) > 0:
+                b_threshold = max(1, int(b_boundary_products.iloc[-1]['monthly_avg']))
+            else:
+                b_threshold = max(1, int(monthly_avg_df['monthly_avg'].max() * 0.2))
             
             # A区分とB区分の下限値が同じ場合の調整
             if a_threshold <= b_threshold:
@@ -614,9 +627,9 @@ def calculate_default_quantity_ranges(df, base_column='Actual'):
         ]
         
     except Exception:
-        # エラーが発生した場合はデフォルト値を返す
+        # エラーが発生した場合は最小値を返す
         return [
-            {'name': 'A', 'min_value': 50},
-            {'name': 'B', 'min_value': 10},
+            {'name': 'A', 'min_value': 1},
+            {'name': 'B', 'min_value': 1},
             {'name': 'C', 'min_value': 0}
         ] 

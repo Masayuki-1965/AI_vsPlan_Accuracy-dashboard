@@ -539,7 +539,7 @@ def show_step4():
                 if st.session_state.get('selected_generation_categories') != []:
                     st.session_state.abc_quantity_auto_calculated = False
                 st.session_state.selected_generation_categories = []  # 全分類対象の場合は空リストで処理
-                st.info("💡 「全て」を選択：すべての分類に対して、同じ基準で分類単位ごとにABC区分を自動生成します。")
+                st.info("「全て」を選択した場合、すべての分類に対して、同一基準で分類単位ごとにABC区分を自動生成します。")
             else:
                 # 選択が変更された場合、数量範囲のデフォルト値を再計算
                 if st.session_state.get('selected_generation_categories') != selected_categories:

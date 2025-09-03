@@ -60,7 +60,7 @@ for key, default_value in session_defaults.items():
         st.session_state[key] = default_value
 
 # サイドバーナビゲーション
-st.sidebar.title("📋 ナビゲーション")
+st.sidebar.markdown('<h1 style="color: #1976d2; font-size: 1.5rem; margin-bottom: 1rem;">ナビゲーション</h1>', unsafe_allow_html=True)
 pages = {
     "データセット作成": upload,
     "誤差率帯別評価マトリクス": matrix,
@@ -77,7 +77,18 @@ selected_page = st.sidebar.selectbox(
 if st.session_state.data is not None:
     st.sidebar.success(f"✅ データ読み込み済み ({len(st.session_state.data)}件)")
 else:
-    st.sidebar.warning("⚠️ データが読み込まれていません")
+    st.sidebar.markdown("""
+    <div style="
+        background: #e8f4fd;
+        color: #1976d2;
+        padding: 0.8rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    ">
+        データセットを作成してください
+    </div>
+    """, unsafe_allow_html=True)
 
 # 操作ガイド
 st.sidebar.markdown("---")

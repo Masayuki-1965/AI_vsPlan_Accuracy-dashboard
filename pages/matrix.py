@@ -94,7 +94,19 @@ def show():
     
     # データ確認
     if st.session_state.data is None:
-        st.warning("⚠️ データが読み込まれていません。データアップロードページからデータを読み込んでください。")
+        st.markdown("""
+        <div style="
+            background: #e8f4fd;
+            color: #1976d2;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        ">
+            データセットのセクションで、分析用のデータセットを作成してください。
+        </div>
+        """, unsafe_allow_html=True)
         return
     
     df = st.session_state.data

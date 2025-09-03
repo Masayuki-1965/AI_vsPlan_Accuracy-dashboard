@@ -133,13 +133,15 @@ def show():
         st.write(f"列名: {list(df.columns)}")
 
 def apply_filters(df):
-    """② フィルター設定UI（分類・期間のみ）"""
+    """② フィルター設定UI（分類・期間・評価方法）"""
+    from utils.common_helpers import get_enhanced_date_options, parse_date_filter_selection, get_evaluation_method_options, aggregate_data_for_cumulative_evaluation, is_single_month_selection, get_default_date_selection, get_period_filter_help_text
+    
     # 分類がマッピングされているかどうかを確認
     has_category = 'category_code' in df.columns and not df['category_code'].isna().all()
     
     if has_category:
         # 分類フィルターありの場合
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             # 分類フィルター（初期値：全て）
@@ -151,42 +153,104 @@ def apply_filters(df):
             )
         
         with col2:
-            # 期間フィルター（初期値：全期間）
+            # 拡張された期間フィルター（デフォルト値・ヘルプテキスト付き）
             if 'Date' in df.columns:
-                date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
+                date_options = get_enhanced_date_options(df)
+                default_date = get_default_date_selection(df)
+                default_index = date_options.index(default_date) if default_date in date_options else 0
+                
                 selected_date = st.selectbox(
                     "期間",
                     date_options,
-                    key="date_filter"
+                    index=default_index,
+                    key="date_filter",
+                    help=get_period_filter_help_text()
                 )
             else:
                 selected_date = '全期間'
         
-        # フィルター適用
-        filtered_df = df.copy()
-        
-        if selected_category != '全て':
-            filtered_df = filtered_df[filtered_df['category_code'] == selected_category]
-        
-        if selected_date != '全期間' and 'Date' in df.columns:
-            filtered_df = filtered_df[filtered_df['Date'] == selected_date]
-    
+        with col3:
+            # 単月選択時は評価方法を無効化
+            is_single_month = is_single_month_selection(selected_date, df)
+            
+            if is_single_month:
+                st.selectbox(
+                    "評価方法",
+                    ["単月データ評価"],
+                    disabled=True,
+                    key="evaluation_method",
+                    help="単月選択時は単月データ評価のみ利用可能です"
+                )
+                selected_evaluation = "単月データ評価"
+            else:
+                # 評価方法の選択（デフォルト：単月データ評価）
+                evaluation_options = get_evaluation_method_options()
+                selected_evaluation = st.selectbox(
+                    "評価方法",
+                    evaluation_options,
+                    index=0,  # デフォルト：単月データ評価
+                    key="evaluation_method"
+                )
     else:
         # 分類フィルターなしの場合
-        # 期間フィルターのみ
-        if 'Date' in df.columns:
-            date_options = ['全期間'] + sorted(df['Date'].dropna().unique().tolist())
-            selected_date = st.selectbox(
-                "期間",
-                date_options,
-                key="date_filter"
-            )
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 拡張された期間フィルター（デフォルト値・ヘルプテキスト付き）
+            if 'Date' in df.columns:
+                date_options = get_enhanced_date_options(df)
+                default_date = get_default_date_selection(df)
+                default_index = date_options.index(default_date) if default_date in date_options else 0
+                
+                selected_date = st.selectbox(
+                    "期間",
+                    date_options,
+                    index=default_index,
+                    key="date_filter",
+                    help=get_period_filter_help_text()
+                )
+            else:
+                selected_date = '全期間'
+        
+        with col2:
+            # 単月選択時は評価方法を無効化
+            is_single_month = is_single_month_selection(selected_date, df)
             
-            filtered_df = df.copy()
-            if selected_date != '全期間':
-                filtered_df = filtered_df[filtered_df['Date'] == selected_date]
-        else:
-            filtered_df = df.copy()
+            if is_single_month:
+                st.selectbox(
+                    "評価方法",
+                    ["単月データ評価"],
+                    disabled=True,
+                    key="evaluation_method",
+                    help="単月選択時は単月データ評価のみ利用可能です"
+                )
+                selected_evaluation = "単月データ評価"
+            else:
+                # 評価方法の選択（デフォルト：単月データ評価）
+                evaluation_options = get_evaluation_method_options()
+                selected_evaluation = st.selectbox(
+                    "評価方法",
+                    evaluation_options,
+                    index=0,  # デフォルト：単月データ評価
+                    key="evaluation_method"
+                )
+        
+        selected_category = '全て'
+    
+    # フィルター適用
+    filtered_df = df.copy()
+    
+    # 分類フィルター適用
+    if selected_category != '全て':
+        filtered_df = filtered_df[filtered_df['category_code'] == selected_category]
+    
+    # 評価方法に応じた処理
+    if selected_evaluation == "累積データ評価（選択期間で集計）":
+        # 累積データ評価の場合
+        filtered_df = aggregate_data_for_cumulative_evaluation(filtered_df, selected_date)
+    else:
+        # 単月データ評価の場合（従来通り）
+        filtered_df = parse_date_filter_selection(selected_date, filtered_df)
     
     return filtered_df
 

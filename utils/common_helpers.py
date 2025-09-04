@@ -276,6 +276,21 @@ def get_default_date_selection(df, date_column='Date'):
     """デフォルトの期間選択を取得する（すべてのケースで全期間）"""
     return '全期間'
 
+def initialize_filter_session_state():
+    """フィルター設定のセッション状態を初期化（保持機能強化）"""
+    # 基本フィルター設定の初期化
+    if 'filter_initialized' not in st.session_state:
+        # デフォルト値の設定
+        if 'category_filter' not in st.session_state:
+            st.session_state.category_filter = '全て'
+        if 'date_filter' not in st.session_state:
+            st.session_state.date_filter = '全期間'
+        if 'evaluation_method' not in st.session_state:
+            st.session_state.evaluation_method = '単月データ評価'
+        
+        # 初期化完了フラグ
+        st.session_state.filter_initialized = True
+
 def get_period_filter_help_text():
     """期間フィルターのヘルプテキストを返す"""
     return ('「前半3か月間」と「前半2か月間」は、対象データが存在する場合は必ず表示する。'

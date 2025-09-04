@@ -212,7 +212,10 @@ def show():
 
 def apply_filters(df):
     """③ フィルター設定UIとフィルター適用（分類・期間・評価方法）"""
-    from utils.common_helpers import get_enhanced_date_options, parse_date_filter_selection, get_evaluation_method_options, aggregate_data_for_cumulative_evaluation, is_single_month_selection, get_default_date_selection, get_period_filter_help_text
+    from utils.common_helpers import get_enhanced_date_options, parse_date_filter_selection, get_evaluation_method_options, aggregate_data_for_cumulative_evaluation, is_single_month_selection, get_default_date_selection, get_period_filter_help_text, initialize_filter_session_state
+    
+    # フィルター設定のセッション状態を初期化（保持機能強化）
+    initialize_filter_session_state()
     
     # 分類がマッピングされているかどうかを確認
     has_category = 'category_code' in df.columns and not df['category_code'].isna().all()

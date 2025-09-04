@@ -72,6 +72,55 @@ st.sidebar.markdown("""
 ">ナビゲーション</div>
 """, unsafe_allow_html=True)
 
+# ナビゲーション用カスタムCSS（改善前方式ベース）
+st.markdown("""
+<style>
+/* サイドバーのラジオボタンスタイル */
+.stSidebar .stRadio > div {
+    gap: 0.2rem;
+}
+
+.stSidebar .stRadio > div > label {
+    background: transparent;
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    margin: 0.1rem 0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border: 1px solid #e0e0e0;
+}
+
+.stSidebar .stRadio > div > label:hover {
+    background: #f5f7fa;
+    border: 1px solid #d0d7de;
+}
+
+.stSidebar .stRadio > div > label[data-checked="true"] {
+    background: #e3f2fd;
+    border: 2px solid #1976d2;
+}
+
+/* フォント調整 */
+.stSidebar .stRadio > div > label > div:last-child {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #333333;
+}
+
+.stSidebar .stRadio > div > label[data-checked="true"] > div:last-child {
+    font-weight: 700;
+    color: #1976d2;
+}
+
+/* ラジオボタンの円形アイコンスタイル */
+.stSidebar .stRadio > div > label > div:first-child {
+    margin-right: 0.5rem;
+}
+</style>
+""", unsafe_allow_html=True)
+
 pages = {
     "データセット作成": upload,
     "誤差率帯別評価マトリクス": matrix,
@@ -79,9 +128,11 @@ pages = {
     "月次推移折れ線グラフ一覧": monthly_trend
 }
 
-selected_page = st.sidebar.selectbox(
+# 4つのセクションを縦並びリストで表示（Streamlit標準機能使用）
+selected_page = st.sidebar.radio(
     "セクション選択:",
-    list(pages.keys())
+    list(pages.keys()),
+    key="page_navigation"
 )
 
 # データ状態表示

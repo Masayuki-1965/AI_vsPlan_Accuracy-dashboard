@@ -60,7 +60,18 @@ for key, default_value in session_defaults.items():
         st.session_state[key] = default_value
 
 # サイドバーナビゲーション
-st.sidebar.markdown('<h1 style="color: #1976d2; font-size: 1.5rem; margin-bottom: 1rem;">ナビゲーション</h1>', unsafe_allow_html=True)
+st.sidebar.markdown("""
+<div style="
+    font-size: 1.4em;
+    font-weight: bold;
+    color: #1976d2;
+    border-left: 4px solid #1976d2;
+    padding-left: 12px;
+    margin-bottom: 1em;
+    margin-top: 0;
+">ナビゲーション</div>
+""", unsafe_allow_html=True)
+
 pages = {
     "データセット作成": upload,
     "誤差率帯別評価マトリクス": matrix,
@@ -69,7 +80,7 @@ pages = {
 }
 
 selected_page = st.sidebar.selectbox(
-    "ページ選択:",
+    "セクション選択:",
     list(pages.keys())
 )
 
@@ -85,8 +96,9 @@ else:
         border-radius: 8px;
         margin-bottom: 1rem;
         font-size: 0.9rem;
+        line-height: 1.6;
     ">
-        データセットを作成してください
+        データセット作成後、「セクション選択」から必要なメニューを選び、分析を進めてください。
     </div>
     """, unsafe_allow_html=True)
 

@@ -184,7 +184,7 @@ def is_consecutive_dates(dates):
     return True
 
 def get_enhanced_date_options(df, date_column='Date'):
-    """詳細仕様に従った期間選択肢を生成"""
+    """要求仕様に従った期間選択肢を生成"""
     if date_column not in df.columns:
         return ['全期間']
     
@@ -203,44 +203,34 @@ def get_enhanced_date_options(df, date_column='Date'):
     
     if is_consecutive:
         # 連続データの場合
-        if date_count >= 6:
-            # ケース①：連続6か月以上
-            first_half = available_dates[:3]
-            last_half = available_dates[-3:]
-            first_half_label = f"前半3か月間（{first_half[0]}～{first_half[-1]}）"
-            last_half_label = f"後半3か月間（{last_half[0]}～{last_half[-1]}）"
-            date_options.extend([first_half_label, last_half_label])
+        if date_count >= 3:
+            # ケース①：連続3か月以上の場合
+            # 前半3か月間（データが存在する場合は必ず表示）
+            if date_count >= 3:
+                first_3_months = available_dates[:3]
+                first_3_label = f"前半3か月間（{first_3_months[0]}～{first_3_months[-1]}）"
+                date_options.append(first_3_label)
             
-        elif date_count == 5:
-            # ケース②：連続5か月
-            first_half = available_dates[:3]
-            last_half = available_dates[2:5]  # 3か月間（重複あり）
-            first_half_label = f"前半3か月間（{first_half[0]}～{first_half[-1]}）"
-            last_half_label = f"後半3か月間（{last_half[0]}～{last_half[-1]}）"
-            date_options.extend([first_half_label, last_half_label])
-            
-        elif date_count == 4:
-            # ケース③：連続4か月
-            first_half = available_dates[:3]
-            last_half = available_dates[1:4]  # 3か月間（重複あり）
-            first_half_label = f"前半3か月間（{first_half[0]}～{first_half[-1]}）"
-            last_half_label = f"後半3か月間（{last_half[0]}～{last_half[-1]}）"
-            date_options.extend([first_half_label, last_half_label])
-            
-        elif date_count == 3:
-            # ケース④：連続3か月
-            first_half = available_dates[:2]
-            last_half = available_dates[1:3]  # 2か月間（重複あり）
-            first_half_label = f"前半2か月間（{first_half[0]}～{first_half[-1]}）"
-            last_half_label = f"後半2か月間（{last_half[0]}～{last_half[-1]}）"
-            date_options.extend([first_half_label, last_half_label])
+            # 前半2か月間（データが存在する場合は必ず表示）
+            if date_count >= 2:
+                first_2_months = available_dates[:2]
+                first_2_label = f"前半2か月間（{first_2_months[0]}～{first_2_months[-1]}）"
+                date_options.append(first_2_label)
+                
+        elif date_count == 2:
+            # ケース②：連続2か月の場合
+            # 前半2か月間（データが存在する場合は必ず表示）
+            first_2_months = available_dates[:2]
+            first_2_label = f"前半2か月間（{first_2_months[0]}～{first_2_months[-1]}）"
+            date_options.append(first_2_label)
         
-        # ケース⑤（2か月）、ケース⑥（1か月）は前半・後半なし
+        # ケース③：1か月のみの場合は前半設定なし（何も追加しない）
     
-    # ケース⑦：不連続の場合も前半・後半なし
+    # ケース④：不連続の場合も前半設定なし（何も追加しない）
     
-    # 個別月を追加
-    date_options.extend(available_dates)
+    # 個別月を追加（すべてのケースで）
+    for date in available_dates:
+        date_options.append(date)
     
     return date_options
 
@@ -258,50 +248,14 @@ def parse_date_filter_selection(selected_date, df, date_column='Date'):
     # selected_dateを文字列に変換（整数の場合に対応）
     selected_date_str = str(selected_date)
     
-    # 連続性を判定
-    is_consecutive = is_consecutive_dates(available_dates)
-    date_count = len(available_dates)
-    
-    # 前半期間の判定
-    if selected_date_str.startswith('前半') and 'か月間' in selected_date_str:
-        if is_consecutive:
-            if date_count >= 6:
-                # ケース①：連続6か月以上
-                target_dates = available_dates[:3]
-            elif date_count == 5:
-                # ケース②：連続5か月
-                target_dates = available_dates[:3]
-            elif date_count == 4:
-                # ケース③：連続4か月
-                target_dates = available_dates[:3]
-            elif date_count == 3:
-                # ケース④：連続3か月
-                target_dates = available_dates[:2]
-            else:
-                target_dates = available_dates
-        else:
-            target_dates = available_dates
+    # 前半3か月間の判定
+    if selected_date_str.startswith('前半3か月間'):
+        target_dates = available_dates[:3]
         return df[df[date_column].isin(target_dates)]
     
-    # 後半期間の判定
-    if selected_date_str.startswith('後半') and 'か月間' in selected_date_str:
-        if is_consecutive:
-            if date_count >= 6:
-                # ケース①：連続6か月以上
-                target_dates = available_dates[-3:]
-            elif date_count == 5:
-                # ケース②：連続5か月
-                target_dates = available_dates[2:5]
-            elif date_count == 4:
-                # ケース③：連続4か月
-                target_dates = available_dates[1:4]
-            elif date_count == 3:
-                # ケース④：連続3か月
-                target_dates = available_dates[1:3]
-            else:
-                target_dates = available_dates
-        else:
-            target_dates = available_dates
+    # 前半2か月間の判定
+    if selected_date_str.startswith('前半2か月間'):
+        target_dates = available_dates[:2]
         return df[df[date_column].isin(target_dates)]
     
     # 個別月の場合（文字列と整数両方に対応）
@@ -324,8 +278,8 @@ def get_default_date_selection(df, date_column='Date'):
 
 def get_period_filter_help_text():
     """期間フィルターのヘルプテキストを返す"""
-    return ('「前半／後半」の分割は3か月単位を基本とし、対象期間が不足する場合は2か月単位に調整する。'
-            'なお、対象期間が2か月以下の場合は、前半／後半の設定は行わない。')
+    return ('「前半3か月間」と「前半2か月間」は、対象データが存在する場合は必ず表示する。'
+            '対象期間が不足する場合は2か月単位に調整し、対象期間が2か月以下の場合は前半の設定を行わない。')
 
 def is_single_month_selection(selected_date, df, date_column='Date'):
     """選択された期間が単月かどうかを判定する"""
@@ -338,8 +292,8 @@ def is_single_month_selection(selected_date, df, date_column='Date'):
     # selected_dateを文字列に変換
     selected_date_str = str(selected_date)
     
-    # 前半・後半の判定
-    if selected_date_str.startswith('前半') or selected_date_str.startswith('後半'):
+    # 前半期間の判定
+    if selected_date_str.startswith('前半'):
         return False
     
     # 個別月の判定
@@ -375,7 +329,7 @@ def aggregate_data_for_cumulative_evaluation(df, selected_date, date_column='Dat
         selected_date_str = str(selected_date)
         if selected_date == '全期間':
             cumulative_df['Date'] = '全期間'
-        elif selected_date_str.startswith('前半') or selected_date_str.startswith('後半'):
+        elif selected_date_str.startswith('前半'):
             cumulative_df['Date'] = selected_date_str
         else:
             cumulative_df['Date'] = selected_date_str

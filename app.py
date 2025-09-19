@@ -45,7 +45,8 @@ st.markdown(f"""
         font-weight: 500;
         color: white;
         text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
-    ">AI予測値と現行計画値を多角的に比較・評価し、計画精度を可視化。改善余地を明らかにする実務特化型ダッシュボード。</p>
+        text-align: left;
+    ">AI予測値と現行計画値を多角的に比較・評価し、計画精度を可視化。改善余地を明らかにする実務特化型ダッシュボード。誰でも同じ基準で簡単に分析できます。</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -123,9 +124,9 @@ st.markdown("""
 
 pages = {
     "データセット作成": upload,
-    "誤差率帯別評価マトリクス": matrix,
-    "散布図分析": scatter,
-    "月次推移折れ線グラフ一覧": monthly_trend
+    "誤差率マトリクス分析": matrix,
+    "誤差率散布図分析": scatter,
+    "月次推移比較": monthly_trend
 }
 
 # 4つのセクションを縦並びリストで表示（Streamlit標準機能使用）

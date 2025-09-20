@@ -86,9 +86,74 @@ def show():
             margin: 0;
             color: #4a90e2;
             line-height: 1.6;
-        ">このセクションでは、AI予測値、計画値（複数可）、実績値の月次データ（CSV）を読み込み、分析用のデータセットを作成します。</p>
+        ">このセクションでは、AI予測値、計画値（複数可）、実績値の月次データ（CSV）を読み込み、分析用データセットを作成します（CSVのデータ形式は注釈を参照）。</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # データ形式ガイド注釈（展開式）
+    with st.expander("データ形式ガイド", expanded=False):
+        st.markdown("""
+        <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
+            データ形式はCSVです。アプリケーション上で扱う項目は「必須項目」と「任意項目」があります。<br>
+            <br>
+            <strong>【必須項目】</strong>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 必須項目の表
+        required_data = {
+            "システム項目名": ["商品コード", "年月", "実績値", "AI予測値", "計画値01"],
+            "形式": [
+                "コード（半角英数字）",
+                "日付（YYYYMM・6桁数字）",
+                "数量（実数値）",
+                "数量（実数値）",
+                "数量（実数値）"
+            ],
+            "内容": [
+                "商品の識別コード",
+                "月次データ",
+                "実績数量",
+                "AIによる予測値",
+                "現行計画値"
+            ]
+        }
+        required_df = pd.DataFrame(required_data)
+        st.dataframe(required_df, use_container_width=False, hide_index=True)
+        
+        st.markdown("""
+        <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
+            <br>
+            <strong>【任意項目】</strong>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 任意項目の表
+        optional_data = {
+            "システム項目名": ["分類", "計画値02", "ABC区分"],
+            "形式": [
+                "名称・コード（全角／半角、日本語可）",
+                "数量（実数値）",
+                "管理区分（半角英数字）"
+            ],
+            "内容": [
+                "分類別に分析する場合に使用",
+                "計画値が複数ある場合に使用",
+                "独自のABC区分を設定する場合に使用"
+            ]
+        }
+        optional_df = pd.DataFrame(optional_data)
+        st.dataframe(optional_df, use_container_width=False, hide_index=True)
+        
+        st.markdown("""
+        <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
+            <br>
+            <strong>【補足】</strong><br>
+            • CSVデータの列名は、アプリ上でシステム項目にマッピングして使用するため、識別できれば任意で構いません。<br>
+            • 「AI予測値」「計画値」のシステム項目名称は変更可能です。その他の項目は変更できません。<br>
+            • ABC区分が必要な場合は、ユーザーがアプリ上で生成・設定してください。
+        </div>
+        """, unsafe_allow_html=True)
     
     # STEP 1: CSVファイルアップロード
     show_step1()

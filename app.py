@@ -26,10 +26,10 @@ st.markdown(f"""
 <div style="
     background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
     color: white;
-    padding: 2rem;
+    padding: 1.5rem;
     border-radius: 12px;
     text-align: center;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     box-shadow: 0 4px 12px rgba(25, 118, 210, 0.2);
 ">
     <h1 style="
@@ -40,7 +40,7 @@ st.markdown(f"""
     ">{APP_INFO['icon']} {APP_INFO['title']}</h1>
     <p style="
         font-size: 1.2rem;
-        margin: 0.5rem 0 0 0;
+        margin: 0.3rem 0 0 0;
         opacity: 0.95;
         font-weight: 500;
         color: white;

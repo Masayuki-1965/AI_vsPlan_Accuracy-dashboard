@@ -69,15 +69,15 @@ def show():
     <div style="
         background: #e8f4fd;
         color: #1976d2;
-        padding: 1rem 1.5rem;
+        padding: 0.8rem 1.2rem;
         border-radius: 12px;
         text-align: left;
-        margin-bottom: 1rem;
+        margin-bottom: 0.8rem;
         box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
     ">
         <h2 style="
             font-size: 1.9rem;
-            margin: 0 0 0.2rem 0;
+            margin: 0 0 0.1rem 0;
             font-weight: 600;
             color: #1976d2;
         ">■ データセット作成</h2>

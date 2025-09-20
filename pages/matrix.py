@@ -28,16 +28,16 @@ def show():
     .section-header-box {
         background: #e8f4fd;
         color: #1976d2;
-        padding: 1rem 1.5rem;
+        padding: 0.8rem 1.2rem;
         border-radius: 12px;
         text-align: left;
-        margin-bottom: 1rem;
+        margin-bottom: 0.8rem;
         box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
     }
 
     .section-header-box h2 {
         font-size: 1.9rem;
-        margin: 0 0 0.2rem 0;
+        margin: 0 0 0.1rem 0;
         font-weight: 600;
         color: #1976d2;
     }
@@ -88,7 +88,7 @@ def show():
     st.markdown("""
     <div class="section-header-box">
         <h2>■ 誤差率マトリクス分析（誤差率帯×ABC区分）</h2>
-        <p>このセクションでは、AI予測値、計画値（複数可）の誤差率を6段階の誤差率帯（0～10%、10～20% … 100%以上）に分類し、ABC区分別にマトリクス形式で集計・可視化します。誤差率タイプは「絶対誤差率」「正の誤差率」「負の誤差率」から選択でき、誤差傾向の把握や欠品・過剰在庫リスクの分析に活用できます。</p>
+        <p>このセクションでは、AI予測値、計画値（複数可）の誤差率を6段階の誤差率帯（0～10%、10～20% … 100%以上）に分類し、ABC区分別にマトリクス形式で集計・可視化します。誤差率タイプは「絶対誤差率」「正の誤差率」「負の誤差率」から選択可能で、誤差傾向の把握や欠品・過剰在庫リスクの分析に活用できます。</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -123,12 +123,12 @@ def show():
         
         # ③ グラフタイトルと補足説明の追加
         st.markdown("""
-        <div class="step-title">誤差率帯別・ABC区分別マトリクス（AI予測値 vs 計画値）</div>
+        <div class="step-title">誤差率帯 × ABC区分別マトリクス（AI予測値 vs 計画値）</div>
         """, unsafe_allow_html=True)
         
         st.markdown("""
         <div class="step-annotation">
-        マトリクスはすべて商品コード単位で集計されており、誤差率の帯域別に件数を可視化することで、分布傾向と予測精度を把握できます。
+        誤差率タイプは「絶対誤差率」「正の誤差率」「負の誤差率」から選択してください。
         </div>
         """, unsafe_allow_html=True)
         
@@ -518,10 +518,11 @@ def display_basic_matrix(matrix_df):
     # ③ 注釈の追加
     st.markdown("""
     <div style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
-    ※ マトリクス内の各セルに表示されている数値は、該当する商品コードの件数です。<br>
-    ※ 誤差率0％（完全一致）の件数は「絶対誤差率」と「正の誤差率」に含まれますが、「負の誤差率」には含まれません。<br>
-    ※ 実績値が0の場合は誤差率を計算できないため、「計算不能（実績0）」として分類されます。<br>
+    ※ マトリクス内の数値は、該当する商品コードの件数を表します。<br>
+    ※ 誤差率0％（完全一致）の件数は、「絶対誤差率」と「正の誤差率」に含まれます。「負の誤差率」には含まれません。<br>
+    ※ 実績値が0の場合、誤差率が計算できないため「計算不能 (実績0)」に分類されます。<br>
     ※ 整合式：絶対誤差率の合計件数 ＝ 正の誤差率の合計件数 ＋ 負の誤差率の合計件数
+    ※ 加重平均誤差率は、実績値で重みづけした加重平均値です。
     </div>
     """, unsafe_allow_html=True)
 

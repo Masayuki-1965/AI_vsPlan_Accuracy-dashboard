@@ -23,16 +23,16 @@ def show():
     .section-header-box {
         background: #e8f4fd;
         color: #1976d2;
-        padding: 1rem 1.5rem;
+        padding: 0.8rem 1.2rem;
         border-radius: 12px;
         text-align: left;
-        margin-bottom: 1rem;
+        margin-bottom: 0.8rem;
         box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
     }
 
     .section-header-box h2 {
         font-size: 1.9rem;
-        margin: 0 0 0.2rem 0;
+        margin: 0 0 0.1rem 0;
         font-weight: 600;
         color: #1976d2;
     }
@@ -902,8 +902,8 @@ def display_abc_average_table(abc_errors, filtered_df):
     # 注釈の配置とスタイル調整（表の下部に移動、UI/UXガイドライン準拠）
     st.markdown("""
     <div class="step-annotation">
-    ※ 誤差率は、ABC区分ごとに実績値で重みづけした加重平均値です。<br>
-    ※ 集計方針：誤差率0％（完全一致）は「絶対誤差率」と「正の誤差率」に含まれ、「負の誤差率」には含まれません。<br>
+    ※ 誤差率は、すべて実績値で重みづけした加重平均値です。<br>
+    ※ 誤差率0％（完全一致）は「絶対誤差率」と「正の誤差率」に含まれ、「負の誤差率」には含まれません。<br>
     ※ 負の誤差率は「▲〇.〇％」、正の誤差率は「＋〇.〇％」で表記し、小数第1位で統一しています。
     </div>
     """, unsafe_allow_html=True)

@@ -17,16 +17,16 @@ def show():
     .section-header-box {
         background: #e8f4fd;
         color: #1976d2;
-        padding: 1rem 1.5rem;
+        padding: 0.8rem 1.2rem;
         border-radius: 12px;
         text-align: left;
-        margin-bottom: 1rem;
+        margin-bottom: 0.8rem;
         box-shadow: 0 1px 4px rgba(33, 150, 243, 0.1);
     }
 
     .section-header-box h2 {
         font-size: 1.9rem;
-        margin: 0 0 0.2rem 0;
+        margin: 0 0 0.1rem 0;
         font-weight: 600;
         color: #1976d2;
     }
@@ -155,7 +155,7 @@ def show():
         <div style="font-size: 0.9rem; color: #666666; line-height: 1.6;">
             各月の絶対誤差率を月別実績値で重みづけして算出した加重平均値です。<br>
             <br>
-            <strong>事例：商品コード WA-AA07HJA-MBN9</strong>
+            <strong>👉 サンプル事例で説明すると、以下のようになります。</strong>
         </div>
         """, unsafe_allow_html=True)
         

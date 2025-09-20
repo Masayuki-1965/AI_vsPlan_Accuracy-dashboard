@@ -270,8 +270,7 @@ def create_filter_ui(df):
             'abc_filter': [],
             'comparison_items': ['AI_pred', 'Plan_01'],
             'comparison_direction': 0,
-            'diff_threshold': 0.1,
-            'diff_input': 0.1,
+            'diff_threshold': 0.1,  # 内部的には0.01単位で管理（0.1 = 10ポイント）
             'sort_order': '降順（差分の大きい順）',
             'max_display': 20
         }
@@ -456,40 +455,48 @@ def create_filter_ui(df):
     # 内部処理用の比較方向も保存
     st.session_state.monthly_trend_filter['internal_comparison_direction'] = internal_direction
     
-    # 差分ポイント設定
-    st.markdown('<div class="section-subtitle">差分ポイント設定</div>', unsafe_allow_html=True)
-    col5, col6 = st.columns(2)
+    # 誤差率の差分設定
+    st.markdown('<div class="section-subtitle">誤差率の差分（何ポイント以上か？）</div>', unsafe_allow_html=True)
+    
+    # スライダーで設定し、右側に数値を表示
+    col5, col6 = st.columns([3, 1])
     
     with col5:
         diff_threshold = st.slider(
-            "差分閾値（0.1 = 10ポイント差）",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.monthly_trend_filter['diff_threshold'],
-            step=0.1,
-            format="%.1f",
+            "差分（1ポイント = 1%の差）",
+            min_value=0,
+            max_value=50,
+            value=int(st.session_state.monthly_trend_filter.get('diff_threshold', 0.1) * 100),
+            step=1,
             key="diff_threshold_ui",
-            help="例：0.1 = 10ポイント差（30%と20%の差）"
+            help="例：10ポイント = 10%の差（30%と20%の差）。0ポイント = 差分に関係なく全て表示"
         )
-        # 状態を保存
-        st.session_state.monthly_trend_filter['diff_threshold'] = diff_threshold
+        # 内部的には0.01単位で保存（0.01 = 1ポイント）
+        internal_diff_value = diff_threshold / 100.0
+        st.session_state.monthly_trend_filter['diff_threshold'] = internal_diff_value
     
     with col6:
-        diff_input = st.number_input(
-            "数値入力（0.1 = 10ポイント差）",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.monthly_trend_filter['diff_input'],
-            step=0.1,
-            format="%.1f",
-            key="diff_input_ui",
-            help="例：0.1 = 10ポイント差（30%と20%の差）"
-        )
-        # 状態を保存
-        st.session_state.monthly_trend_filter['diff_input'] = diff_input
+        # 現在の設定値を数値で表示（他の表示要素とフォントスタイルを統一）
+        display_text = f"{diff_threshold}ポイント" if diff_threshold > 0 else "0ポイント（全て表示）"
+        st.markdown(f"""
+        <div style="
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 0.5rem;
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 400;
+            color: #495057;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        ">
+            {display_text}
+        </div>
+        """, unsafe_allow_html=True)
     
-    # 実際の差分値を決定（スライダーと数値入力の同期）
-    actual_diff = diff_input if diff_input != 0.1 else diff_threshold
+    # 実際の差分値を決定
+    actual_diff = internal_diff_value
     
     # 表示順
     st.markdown('<div class="section-subtitle">表示順</div>', unsafe_allow_html=True)

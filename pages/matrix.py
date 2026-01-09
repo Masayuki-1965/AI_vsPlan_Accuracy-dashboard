@@ -140,9 +140,6 @@ def show():
         
     except Exception as e:
         st.error(f"エラーが発生しました: {str(e)}")
-        st.write("デバッグ情報:")
-        st.write(f"データフレームの形状: {df.shape}")
-        st.write(f"列名: {list(df.columns)}")
 
 def apply_filters(df):
     """② フィルター設定UI（分類・期間・評価方法）"""

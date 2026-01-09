@@ -256,9 +256,6 @@ def show():
         
     except Exception as e:
         st.error(f"エラーが発生しました: {str(e)}")
-        st.write("デバッグ情報:")
-        st.write(f"データフレームの形状: {df.shape}")
-        st.write(f"列名: {list(df.columns)}")
 
 def create_filter_ui(df):
     """抽出条件の設定（可視化対象）UIを作成"""

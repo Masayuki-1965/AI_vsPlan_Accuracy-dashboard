@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import streamlit as st
 from config.settings import ABC_CLASSIFICATION_SETTINGS
 
 def preview_data(df, n_rows=5):
@@ -28,6 +29,139 @@ def clean_numeric_data(df, columns):
             cleaned_df[col] = cleaned_df[col].clip(lower=0)
     
     return cleaned_df
+
+def normalize_numeric_columns(df, target_columns=None, log_results=True):
+    """
+    数値列の正規化処理（カンマ付き文字列対応）
+    
+    Parameters:
+    df: DataFrame - データフレーム
+    target_columns: list - 正規化対象の列名リスト（Noneの場合は実績、AI予測、計画01、計画02を自動検出）
+    log_results: bool - 正規化結果をログ出力するかどうか
+    
+    Returns:
+    DataFrame - 正規化されたデータフレーム
+    """
+    if df is None or df.empty:
+        return df
+    
+    df_normalized = df.copy()
+    
+    # 対象列の自動検出
+    if target_columns is None:
+        # 実績、AI予測、計画01、計画02の列を検出
+        potential_columns = []
+        for col in df.columns:
+            if col in ['Actual', 'AI_pred', 'Plan_01', 'Plan_02']:
+                potential_columns.append(col)
+        target_columns = potential_columns
+    
+    # 正規化結果の記録用
+    normalization_log = {
+        'total_rows': len(df),
+        'columns_processed': {},
+        'failed_samples': []
+    }
+    
+    for col in target_columns:
+        if col not in df_normalized.columns:
+            continue
+        
+        original_values = df_normalized[col].copy()
+        
+        # 文字列の場合の正規化処理
+        if original_values.dtype == 'object':
+            # カンマ除去と前後の空白除去
+            normalized_values = original_values.astype(str).str.replace(',', '').str.strip()
+            
+            # 空文字列やNaNを適切に処理
+            normalized_values = normalized_values.replace(['', 'nan', 'NaN', 'None'], pd.NA)
+            
+            # 数値変換
+            numeric_values = pd.to_numeric(normalized_values, errors='coerce')
+            
+        else:
+            # 既に数値型の場合はそのまま使用
+            numeric_values = pd.to_numeric(original_values, errors='coerce')
+        
+        # 結果を記録
+        valid_count = numeric_values.notna().sum()
+        nan_count = numeric_values.isna().sum()
+        
+        normalization_log['columns_processed'][col] = {
+            'valid_count': int(valid_count),
+            'nan_count': int(nan_count),
+            'original_dtype': str(original_values.dtype),
+            'final_dtype': str(numeric_values.dtype)
+        }
+        
+        # 変換失敗のサンプルを記録（上位5件）
+        if nan_count > 0:
+            failed_mask = numeric_values.isna() & original_values.notna()
+            if failed_mask.any():
+                failed_samples = []
+                failed_indices = df_normalized[failed_mask].index[:5]  # 上位5件
+                for idx in failed_indices:
+                    sample_info = {
+                        'column': col,
+                        'row_index': int(idx),
+                        'original_value': str(original_values.loc[idx])
+                    }
+                    # 商品コードがある場合は追加
+                    if 'P_code' in df_normalized.columns:
+                        sample_info['product_code'] = str(df_normalized.loc[idx, 'P_code'])
+                    if '商品コード' in df_normalized.columns:
+                        sample_info['product_code'] = str(df_normalized.loc[idx, '商品コード'])
+                    failed_samples.append(sample_info)
+                
+                normalization_log['failed_samples'].extend(failed_samples)
+        
+        # 正規化された値を設定
+        df_normalized[col] = numeric_values
+    
+    # ログ出力
+    if log_results and target_columns:
+        _log_normalization_results(normalization_log)
+    
+    return df_normalized
+
+def _log_normalization_results(log_data):
+    """正規化結果をログ出力（問題がある場合のみ）"""
+    
+    # 問題があるかチェック
+    has_issues = False
+    total_nan_count = 0
+    
+    for col, stats in log_data['columns_processed'].items():
+        nan_count = stats['nan_count']
+        total_nan_count += nan_count
+        if nan_count > 0:
+            has_issues = True
+            break
+    
+    # 問題がある場合のみ表示
+    if has_issues or log_data['failed_samples']:
+        st.write("### ⚠️ 数値データ処理の注意事項")
+        
+        # 問題のある列のみ表示
+        for col, stats in log_data['columns_processed'].items():
+            valid_count = stats['valid_count']
+            nan_count = stats['nan_count']
+            total = valid_count + nan_count
+            
+            if nan_count > 0:  # 問題がある列のみ
+                success_rate = (valid_count / total * 100) if total > 0 else 0
+                status_icon = "⚠️" if nan_count < total * 0.1 else "❌"
+                st.write(f"  {status_icon} **{col}**: 数値化成功 {valid_count}件 / 変換失敗 {nan_count}件 (成功率: {success_rate:.1f}%)")
+        
+        # 変換失敗のサンプル
+        if log_data['failed_samples']:
+            st.write("**変換失敗サンプル** (上位3件):")
+            for sample in log_data['failed_samples'][:3]:
+                product_info = f" (商品コード: {sample['product_code']})" if 'product_code' in sample else ""
+                st.write(f"  - 列: {sample['column']}, 元の値: '{sample['original_value']}'{product_info}")
+        
+        st.write("---")
 
 def detect_outliers(df, column, method='iqr', factor=1.5):
     """外れ値の検出"""

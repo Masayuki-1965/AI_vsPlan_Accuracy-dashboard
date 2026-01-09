@@ -646,6 +646,8 @@ def get_selectbox_index(options, value):
 
 def apply_mapping(df, mapping):
     """データフレームにマッピングを適用（カスタム項目名対応）"""
+    from utils.data_processor import normalize_numeric_columns
+    
     mapped_df = pd.DataFrame()
     
     for system_field, csv_column in mapping.items():
@@ -664,6 +666,15 @@ def apply_mapping(df, mapping):
         mapped_df['category_code'] = mapped_df['category_code'].astype(str)
         # 空文字列を「未分類」に置換
         mapped_df['category_code'] = mapped_df['category_code'].replace('', '未分類')
+    
+    # 数値列の正規化処理（実績、AI予測、計画01、計画02）
+    numeric_columns = []
+    for col in mapped_df.columns:
+        if col in ['Actual', 'AI_pred', 'Plan_01', 'Plan_02']:
+            numeric_columns.append(col)
+    
+    if numeric_columns:
+        mapped_df = normalize_numeric_columns(mapped_df, target_columns=numeric_columns, log_results=True)
     
     return mapped_df
 
@@ -1009,6 +1020,7 @@ def create_monthly_summary_table(df):
         if 'Date' not in df.columns:
             return pd.DataFrame()
         
+        
         # 年月データの並び替え
         unique_dates = sorted(df['Date'].unique(), reverse=True)[:12]
         
@@ -1050,29 +1062,64 @@ def create_monthly_summary_table(df):
             else:
                 formatted_date = str(date)
             
+            # 実績合計（数値正規化適用）
+            actual_sum = pd.to_numeric(date_data['Actual'].astype(str).str.replace(',', ''), errors='coerce').sum()
+            
             row = {
                 '年月': formatted_date,
-                '実績合計': int(date_data['Actual'].sum()),
-                ai_pred_name: int(date_data['AI_pred'].sum()),
-                plan_01_name: int(date_data['Plan_01'].sum())
+                '実績合計': int(actual_sum)
             }
             
-            # Plan_02が存在する場合は追加
+            # AI予測列の確認と追加（数値正規化適用）
+            if 'AI_pred' in df.columns:
+                ai_sum = pd.to_numeric(date_data['AI_pred'].astype(str).str.replace(',', ''), errors='coerce').sum()
+                row[ai_pred_name] = int(ai_sum)
+            else:
+                row[ai_pred_name] = 0
+            
+            # 計画01列の確認と追加（数値正規化適用）
+            if 'Plan_01' in df.columns:
+                plan01_sum = pd.to_numeric(date_data['Plan_01'].astype(str).str.replace(',', ''), errors='coerce').sum()
+                row[plan_01_name] = int(plan01_sum)
+            else:
+                row[plan_01_name] = 0
+            
+            # Plan_02が存在する場合は追加（数値正規化適用）
             if 'Plan_02' in df.columns:
-                row[plan_02_name] = int(date_data['Plan_02'].sum())
+                plan02_sum = pd.to_numeric(date_data['Plan_02'].astype(str).str.replace(',', ''), errors='coerce').sum()
+                row[plan_02_name] = int(plan02_sum)
             
             summary_data.append(row)
         
-        # 合計行を追加
+        # 合計行を追加（数値正規化適用）
+        filtered_df = df[df['Date'].isin(unique_dates)]
+        
+        # 実績合計（数値正規化適用）
+        actual_total = pd.to_numeric(filtered_df['Actual'].astype(str).str.replace(',', ''), errors='coerce').sum()
+        
         total_row = {
             '年月': '合計',
-            '実績合計': int(df[df['Date'].isin(unique_dates)]['Actual'].sum()),
-            ai_pred_name: int(df[df['Date'].isin(unique_dates)]['AI_pred'].sum()),
-            plan_01_name: int(df[df['Date'].isin(unique_dates)]['Plan_01'].sum())
+            '実績合計': int(actual_total)
         }
         
+        # AI予測の合計（数値正規化適用）
+        if 'AI_pred' in df.columns:
+            ai_total = pd.to_numeric(filtered_df['AI_pred'].astype(str).str.replace(',', ''), errors='coerce').sum()
+            total_row[ai_pred_name] = int(ai_total)
+        else:
+            total_row[ai_pred_name] = 0
+        
+        # 計画01の合計（数値正規化適用）
+        if 'Plan_01' in df.columns:
+            plan01_total = pd.to_numeric(filtered_df['Plan_01'].astype(str).str.replace(',', ''), errors='coerce').sum()
+            total_row[plan_01_name] = int(plan01_total)
+        else:
+            total_row[plan_01_name] = 0
+        
+        # 計画02の合計（数値正規化適用）
         if 'Plan_02' in df.columns:
-            total_row[plan_02_name] = int(df[df['Date'].isin(unique_dates)]['Plan_02'].sum())
+            plan02_total = pd.to_numeric(filtered_df['Plan_02'].astype(str).str.replace(',', ''), errors='coerce').sum()
+            total_row[plan_02_name] = int(plan02_total)
         
         summary_data.append(total_row)
         

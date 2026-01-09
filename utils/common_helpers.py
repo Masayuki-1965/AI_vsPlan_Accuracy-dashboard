@@ -237,33 +237,36 @@ def get_enhanced_date_options(df, date_column='Date'):
 def parse_date_filter_selection(selected_date, df, date_column='Date'):
     """期間フィルター選択を解析してフィルタリング条件を返す"""
     if selected_date == '全期間':
-        return df.copy()
+        filtered_df = df.copy()
+    else:
+        # 利用可能な年月を取得（昇順ソート）
+        available_dates = sorted(df[date_column].dropna().unique().tolist())
+        
+        if len(available_dates) == 0:
+            filtered_df = df.copy()
+        else:
+            # selected_dateを文字列に変換（整数の場合に対応）
+            selected_date_str = str(selected_date)
+            
+            # 前半3か月間の判定
+            if selected_date_str.startswith('前半3か月間'):
+                target_dates = available_dates[:3]
+                filtered_df = df[df[date_column].isin(target_dates)]
+            # 前半2か月間の判定
+            elif selected_date_str.startswith('前半2か月間'):
+                target_dates = available_dates[:2]
+                filtered_df = df[df[date_column].isin(target_dates)]
+            # 個別月の場合（文字列と整数両方に対応）
+            elif selected_date in available_dates or selected_date_str in [str(d) for d in available_dates]:
+                filtered_df = df[df[date_column] == selected_date] if selected_date in available_dates else df[df[date_column] == selected_date_str]
+            else:
+                # 該当しない場合は全データを返す
+                filtered_df = df.copy()
     
-    # 利用可能な年月を取得（昇順ソート）
-    available_dates = sorted(df[date_column].dropna().unique().tolist())
+    # フィルタリング後のデータに対して数値正規化を適用
+    filtered_df = _ensure_numeric_normalization(filtered_df)
     
-    if len(available_dates) == 0:
-        return df.copy()
-    
-    # selected_dateを文字列に変換（整数の場合に対応）
-    selected_date_str = str(selected_date)
-    
-    # 前半3か月間の判定
-    if selected_date_str.startswith('前半3か月間'):
-        target_dates = available_dates[:3]
-        return df[df[date_column].isin(target_dates)]
-    
-    # 前半2か月間の判定
-    if selected_date_str.startswith('前半2か月間'):
-        target_dates = available_dates[:2]
-        return df[df[date_column].isin(target_dates)]
-    
-    # 個別月の場合（文字列と整数両方に対応）
-    if selected_date in available_dates or selected_date_str in [str(d) for d in available_dates]:
-        return df[df[date_column] == selected_date] if selected_date in available_dates else df[df[date_column] == selected_date_str]
-    
-    # 該当しない場合は全データを返す
-    return df.copy()
+    return filtered_df
 
 def get_evaluation_method_options():
     """評価方法の選択肢を返す"""
@@ -322,10 +325,11 @@ def aggregate_data_for_cumulative_evaluation(df, selected_date, date_column='Dat
     if filtered_df.empty:
         return filtered_df
     
+    # 集計前に数値正規化を適用
+    filtered_df = _ensure_numeric_normalization(filtered_df)
+    
     # 商品コード単位で集計
-    numeric_columns = ['Actual', 'AI_pred', 'Plan_01']
-    if 'Plan_02' in filtered_df.columns:
-        numeric_columns.append('Plan_02')
+    numeric_columns = ['Actual', 'AI_pred', 'Plan_01', 'Plan_02']
     
     # 集計対象列を特定
     group_columns = ['P_code']
@@ -354,3 +358,28 @@ def aggregate_data_for_cumulative_evaluation(df, selected_date, date_column='Dat
     except Exception as e:
         st.error(f"累積データの集計でエラーが発生しました: {str(e)}")
         return filtered_df
+
+def _ensure_numeric_normalization(df):
+    """データフレームの数値列を確実に正規化する"""
+    if df is None or df.empty:
+        return df
+    
+    try:
+        from utils.data_processor import normalize_numeric_columns
+        
+        # 数値正規化対象の列を特定
+        numeric_columns = []
+        for col in df.columns:
+            if col in ['Actual', 'AI_pred', 'Plan_01', 'Plan_02']:
+                numeric_columns.append(col)
+        
+        if numeric_columns:
+            # 正規化を適用（ログ出力は無効化）
+            df = normalize_numeric_columns(df, target_columns=numeric_columns, log_results=False)
+        
+        return df
+    
+    except Exception as e:
+        # 正規化に失敗した場合は元のデータを返す
+        st.warning(f"数値正規化処理でエラーが発生しました: {str(e)}")
+        return df

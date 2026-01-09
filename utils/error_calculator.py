@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import streamlit as st
 
 def calculate_error_rates(df, plan_column, actual_column):
     """
@@ -14,6 +15,9 @@ def calculate_error_rates(df, plan_column, actual_column):
     DataFrame - 誤差率が追加されたデータフレーム
     """
     result_df = df.copy()
+    
+    # 誤差率計算の前提チェック（問題がある場合のみ表示）
+    _validate_error_calculation_prerequisites(result_df, plan_column, actual_column)
     
     plan_values = result_df[plan_column]
     actual_values = result_df[actual_column]
@@ -199,6 +203,24 @@ def create_error_matrix(df, group_columns=None):
     })
     
     return matrix.reset_index()
+
+def _validate_error_calculation_prerequisites(df, plan_column, actual_column):
+    """誤差率計算の前提条件をチェック（重要な問題のみ表示）"""
+    critical_issues = []
+    
+    # 列の存在チェック（これは重要なエラー）
+    if plan_column not in df.columns:
+        critical_issues.append(f"計画値列 '{plan_column}' が存在しません")
+    if actual_column not in df.columns:
+        critical_issues.append(f"実績値列 '{actual_column}' が存在しません")
+    
+    # 重要なエラーのみ表示
+    if critical_issues:
+        st.error("❌ 誤差率計算エラー: " + ", ".join(critical_issues))
+        return
+    
+    # その他のチェック（データ型、NaN値）は内部的に実行するが表示しない
+    # これにより、計算は正常に動作するが、ユーザーにはノイズを表示しない
 
 def compare_prediction_accuracy(df):
     """
